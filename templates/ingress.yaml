@@ -1,0 +1,36 @@
+{{/*
+Copyright IO ANALYTICA. All Rights Reserved.
+SPDX-License-Identifier: Apache-2.0
+*/}}
+{{- if .Values.ingress.enabled }}
+apiVersion: {{ include "common.capabilities.ingress.apiVersion" . }}
+kind: Ingress
+metadata:
+  name: {{ include "common.names.fullname" . }}
+  namespace: {{ include "common.names.namespace" . | quote }}
+  labels: {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 4 }}
+  annotations:
+    {{- include "common.tplvalues.render" (dict "value" (include "nginx-static.ingress.primaryAnnotations" . | fromYaml) "context" $) | nindent 4 }}
+spec:
+  {{- if and .Values.ingress.className (eq "true" (include "common.ingress.supportsIngressClassname" .)) }}
+  ingressClassName: {{ .Values.ingress.className | quote }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- $defaultPath := dict "path" "/" "pathType" $.Values.ingress.pathType -}}
+          {{- range (default (list $defaultPath) .paths) }}
+          - path: {{ .path }}
+            {{- if eq "true" (include "common.ingress.supportsPathType" $) }}
+            pathType: {{ default $.Values.ingress.pathType .pathType }}
+            {{- end }}
+            backend:
+              {{- include "common.ingress.backend" (dict "serviceName" (include "common.names.fullname" $) "servicePort" $.Values.service.port "context" $) | nindent 14 }}
+          {{- end }}
+    {{- end }}
+  {{- with .Values.ingress.tls }}
+  tls: {{- include "common.tplvalues.render" (dict "value" . "context" $) | nindent 4 }}
+  {{- end }}
+{{- end }}

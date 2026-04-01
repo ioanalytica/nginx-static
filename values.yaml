@@ -1,0 +1,174 @@
+# Copyright IO ANALYTICA. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+## @section Global parameters
+##
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+
+## @section Common parameters
+##
+nameOverride: ""
+fullnameOverride: ""
+namespaceOverride: ""
+kubeVersion: ""
+commonLabels: {}
+commonAnnotations: {}
+
+## @section Image parameters
+##
+image:
+  registry: harbor.ioanalytica.com
+  repository: io/websites/example
+  ## Defaults to .Chart.AppVersion when empty
+  tag: ""
+  digest: ""
+  pullPolicy: Always
+  pullSecrets: []
+
+## @section Workload parameters
+##
+replicaCount: 1
+containerPort: 8080
+
+## Resources: pick a preset OR set requests/limits explicitly.
+## Allowed presets: nano, micro, small, medium, large, xlarge, 2xlarge.
+## When resourcesPreset is set, it wins over resources.
+resourcesPreset: ""
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+    ephemeral-storage: 50Mi
+  limits:
+    cpu: 250m
+    memory: 128Mi
+    ephemeral-storage: 256Mi
+
+probes:
+  readiness:
+    enabled: true
+    tcpSocket:
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 2
+  liveness:
+    enabled: true
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 20
+  startup:
+    enabled: false
+
+podSecurityContext: {}
+containerSecurityContext: {}
+podLabels: {}
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+## @section Autoscaling parameters
+##
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 0
+  ## Extra metrics appended verbatim to spec.metrics
+  metrics: []
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 15
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+
+## @section PodDisruptionBudget parameters
+##
+pdb:
+  enabled: true
+  minAvailable: 1
+  maxUnavailable: ""
+
+## @section Service parameters
+##
+service:
+  type: ClusterIP
+  port: 80
+  annotations: {}
+
+## @section Ingress parameters
+##
+ingress:
+  enabled: true
+  className: nginx
+  pathType: ImplementationSpecific
+
+  ## Annotations applied to BOTH the primary ingress and every redirect.
+  ## Override or extend per-ingress via ingress.annotations / redirects[].annotations.
+  commonAnnotations:
+    nginx.ingress.kubernetes.io/whitelist-source-range: "0.0.0.0/0, ::/0"
+    nginx.ingress.kubernetes.io/server-snippet: |
+      # Dot-Ban: .env, .git, .htaccess etc.
+      location ~ /\. {
+        return 444;
+      }
+      # PHP-Ban: static site, no PHP
+      location ~ \.php$ {
+        return 444;
+      }
+      # WordPress-ban: block common WP scan paths
+      location ~* ^/(wp-admin|wp-includes|wp-content|wp-login\.php|wp-cron\.php|xmlrpc\.php) {
+        return 444;
+      }
+
+  ## Extra annotations merged on top of commonAnnotations for the primary ingress only
+  annotations: {}
+
+  hosts:
+    - host: example.com
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+
+  tls: []
+  ## Example:
+  ## tls:
+  ##   - hosts:
+  ##       - example.com
+  ##     secretName: example-com-tls
+
+## @section Redirect ingresses
+##
+## Optional list of redirect ingress objects. Each entry produces one Ingress
+## that responds to its hosts with a permanent redirect to targetUrl. The
+## ingress.commonAnnotations are merged in automatically; per-redirect
+## annotations override.
+redirects: []
+## Example:
+## redirects:
+##   - name: aliases
+##     enabled: true
+##     targetUrl: https://example.com
+##     annotations:
+##       cert-manager.io/cluster-issuer: letsencrypt-prod
+##     hosts:
+##       - www.example.com
+##       - example.net
+##     tls:
+##       - hosts:
+##           - www.example.com
+##           - example.net
+##         secretName: example-aliases-tls

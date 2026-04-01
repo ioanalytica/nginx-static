@@ -2,29 +2,34 @@
 # SPDX-License-Identifier: Apache-2.0
 
 apiVersion: v2
-name: common
+name: nginx-static
 version: 0.1.0
-appVersion: 0.1.0
-type: library
+appVersion: "1.0.0"
+type: application
 
 description: >-
-  A library Helm chart for grouping common logic between IO ANALYTICA charts.
-  This chart is not deployable by itself.
+  Helm chart for deploying a static nginx-served website with optional
+  HPA-driven scaling, a PodDisruptionBudget, a primary ingress, and any
+  number of optional redirect ingresses.
 
-home: https://github.com/ioanalytica/common-helm
+home: https://github.com/ioanalytica/nginx-static
 sources:
-  - https://github.com/ioanalytica/common-helm
+  - https://github.com/ioanalytica/nginx-static
 
 maintainers:
   - name: IO ANALYTICA
     url: https://ioanalytica.com
 
 keywords:
-  - common
-  - helper
-  - template
-  - function
+  - nginx
+  - static
+  - website
+
+dependencies:
+  - name: common
+    repository: oci://ghcr.io/ioanalytica/charts
+    version: 0.1.x
 
 annotations:
-  category: Infrastructure
+  category: Web
   licenses: Apache-2.0

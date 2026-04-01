@@ -1,0 +1,30 @@
+{{ include "common.names.fullname" . }} has been deployed.
+
+Image:        {{ include "common.images.image" (dict "imageRoot" .Values.image "global" .Values.global "chart" .Chart) }}
+Namespace:    {{ include "common.names.namespace" . }}
+Service:      {{ include "common.names.fullname" . }} ({{ .Values.service.type }} on port {{ .Values.service.port }})
+{{- if .Values.autoscaling.enabled }}
+Autoscaling:  enabled, {{ .Values.autoscaling.minReplicas }}–{{ .Values.autoscaling.maxReplicas }} replicas
+              CPU target: {{ .Values.autoscaling.targetCPUUtilizationPercentage }}%
+{{- else }}
+Replicas:     {{ .Values.replicaCount }} (autoscaling disabled)
+{{- end }}
+{{- if .Values.ingress.enabled }}
+
+Primary ingress hosts:
+{{- range .Values.ingress.hosts }}
+  - {{ .host }}
+{{- end }}
+{{- end }}
+{{- if .Values.redirects }}
+
+Redirect ingresses:
+{{- range $i, $r := .Values.redirects }}
+{{- if and $r (default true $r.enabled) }}
+  - → {{ $r.targetUrl }} from:
+    {{- range $r.hosts }}
+    · {{ . }}
+    {{- end }}
+{{- end }}
+{{- end }}
+{{- end }}

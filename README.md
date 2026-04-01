@@ -1,53 +1,95 @@
-# IO ANALYTICA Common Helm Chart
+# nginx-static
 
-A library Helm chart for grouping common logic between IO ANALYTICA charts. This chart is not deployable by itself.
+Helm chart for deploying a static, nginx-served website (one Helm release per
+site). Built on top of the [`common`](https://github.com/ioanalytica/common-helm)
+library chart.
 
-## Usage
+Each release renders:
 
-Add this chart as a dependency in your `Chart.yaml`:
+- A `Deployment` with configurable image, probes, resources (preset or explicit), and pod-level overrides.
+- A `Service` exposing the container port.
+- An optional `HorizontalPodAutoscaler` (CPU and/or memory based, plus arbitrary extra metrics) with a configurable `behavior` block — this is how scaling is driven from values.
+- An optional `PodDisruptionBudget`.
+- An optional primary `Ingress`.
+- An optional list of redirect `Ingress` objects, each pointing a set of hosts at one `targetUrl` via `nginx.ingress.kubernetes.io/permanent-redirect`.
 
-```yaml
-dependencies:
-  - name: common
-    repository: oci://ghcr.io/ioanalytica/charts
-    version: 0.1.x
+## Install
+
+```sh
+helm install my-site oci://ghcr.io/ioanalytica/charts/nginx-static \
+  -n websites-static --create-namespace \
+  -f my-values.yaml
 ```
 
-Then use the provided template helpers in your chart templates.
+See [`examples/`](./examples) for ready-to-use values for `ioanalytica.com`,
+`juliafranck.de`, and `tiferet`.
 
-## Provided Helpers
+## Scaling
 
-| Helper | Description |
-|--------|-------------|
-| `common.names.name` | Chart name, truncated to 63 chars |
-| `common.names.fullname` | Fully qualified app name |
-| `common.names.chart` | Chart name and version |
-| `common.names.namespace` | Release namespace (overridable) |
-| `common.labels.standard` | Standard Kubernetes labels |
-| `common.labels.matchLabels` | Selector labels for immutable fields |
-| `common.tplvalues.render` | Render templated values |
-| `common.tplvalues.merge` | Merge templated value lists |
-| `common.images.image` | Build image reference from registry/repo/tag |
-| `common.images.pullSecrets` | Generate imagePullSecrets list |
-| `common.resources.preset` | Resource presets (nano through 2xlarge) |
-| `common.capabilities.*` | Kubernetes API version detection |
-| `common.storage.class` | Storage class resolution |
-| `common.compatibility.renderSecurityContext` | OpenShift-compatible security context |
-| `common.affinities.*` | Pod and node affinity helpers |
-| `common.ingress.*` | Ingress backend and feature detection |
-| `common.secrets.passwords.manage` | Secret password generation and lookup |
+Scaling is driven from values:
 
-### Resource Presets
+```yaml
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 15
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+```
 
-| Preset | CPU Request | Memory Request | CPU Limit | Memory Limit |
-|--------|------------|----------------|-----------|--------------|
-| nano | 100m | 128Mi | 150m | 192Mi |
-| micro | 250m | 256Mi | 375m | 384Mi |
-| small | 500m | 512Mi | 750m | 768Mi |
-| medium | 500m | 1Gi | 750m | 1.5Gi |
-| large | 1.0 | 2Gi | 1.5 | 3Gi |
-| xlarge | 2.0 | 4Gi | 3.0 | 6Gi |
-| 2xlarge | 4.0 | 8Gi | 6.0 | 12Gi |
+When `autoscaling.enabled: false`, the deployment uses `replicaCount` instead.
+
+## Redirect ingresses
+
+Redirects are optional and per-release. Each entry produces one Ingress with
+its hosts redirected to `targetUrl`. The chart's `ingress.commonAnnotations`
+(default: WAF-style snippet blocking dotfiles, PHP, and common WordPress scan
+paths) are merged into every redirect; per-redirect `annotations` override.
+
+```yaml
+redirects:
+  - name: aliases
+    targetUrl: https://example.com
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+    hosts:
+      - www.example.com
+      - example.net
+    tls:
+      - hosts: [www.example.com, example.net]
+        secretName: example-aliases-tls
+```
+
+Set `enabled: false` on an entry to keep it in values without rendering it.
+
+## Values reference
+
+See [`values.yaml`](./values.yaml) for the full schema and defaults.
+
+| Key | Default | Description |
+|---|---|---|
+| `image.registry` / `repository` / `tag` | harbor.ioanalytica.com / `io/websites/example` / `""` | Tag falls back to `Chart.AppVersion`. |
+| `containerPort` | `8080` | Pod port; service `targetPort` is named `http`. |
+| `resourcesPreset` | `""` | One of `nano`, `micro`, `small`, `medium`, `large`, `xlarge`, `2xlarge` (from common). Wins over `resources` when set. |
+| `resources` | small request/limit pair | Used when `resourcesPreset` is empty. |
+| `probes.readiness` / `liveness` / `startup` | TCP `/healthz` defaults | Each gated by `enabled`; remaining keys are passed verbatim. |
+| `autoscaling.enabled` | `true` | When false, `replicaCount` is used. |
+| `pdb.enabled` | `true` | Disables the PodDisruptionBudget when false. |
+| `ingress.commonAnnotations` | dotfile/PHP/WP server-snippet | Merged into primary + redirect ingresses. |
+| `ingress.hosts` | `[example.com]` | Hosts and paths for the primary ingress. |
+| `redirects` | `[]` | Optional list of redirect ingresses (see above). |
 
 ## License
 

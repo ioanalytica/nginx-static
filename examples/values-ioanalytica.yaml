@@ -1,0 +1,81 @@
+# Example values for ioanalytica.com (matches k3s-io/apps/websites/ioanalytica.com).
+# Install with:
+#   helm install ioanalytica-site oci://ghcr.io/ioanalytica/charts/nginx-static \
+#     -n websites-static -f values-ioanalytica.yaml
+
+fullnameOverride: ioanalytica-site
+
+image:
+  registry: harbor.ioanalytica.com
+  repository: io/websites/ioanalytica
+  tag: "1.0.2"
+
+ingress:
+  hosts:
+    - host: ioanalytica.com
+  tls:
+    - hosts:
+        - ioanalytica.com
+      secretName: tls-ioanalytica-wildcard-acme
+
+redirects:
+  - name: aliases
+    targetUrl: https://ioanalytica.com
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      ingress.kubernetes.io/force-hsts: "true"
+      ingress.kubernetes.io/ssl-redirect: "true"
+    hosts:
+      - ioanalytica.ai
+      - ioanalytica.at
+      - ioanalytica.cc
+      - ioanalytica.ch
+      - ioanalytica.co
+      - ioanalytica.de
+      - ioanalytica.eu
+      - ioanalytica.fr
+      - ioanalytica.info
+      - ioanalytica.io
+      - ioanalytica.net
+      - ioanalytica.org
+      - www.ioanalytica.ai
+      - www.ioanalytica.at
+      - www.ioanalytica.com
+      - www.ioanalytica.cc
+      - www.ioanalytica.ch
+      - www.ioanalytica.co
+      - www.ioanalytica.de
+      - www.ioanalytica.eu
+      - www.ioanalytica.fr
+      - www.ioanalytica.info
+      - www.ioanalytica.io
+      - www.ioanalytica.net
+      - www.ioanalytica.org
+    tls:
+      - hosts:
+          - ioanalytica.ai
+          - ioanalytica.at
+          - ioanalytica.cc
+          - ioanalytica.ch
+          - ioanalytica.co
+          - ioanalytica.de
+          - ioanalytica.eu
+          - ioanalytica.fr
+          - ioanalytica.info
+          - ioanalytica.io
+          - ioanalytica.net
+          - ioanalytica.org
+          - www.ioanalytica.ai
+          - www.ioanalytica.at
+          - www.ioanalytica.com
+          - www.ioanalytica.cc
+          - www.ioanalytica.ch
+          - www.ioanalytica.co
+          - www.ioanalytica.de
+          - www.ioanalytica.eu
+          - www.ioanalytica.fr
+          - www.ioanalytica.info
+          - www.ioanalytica.io
+          - www.ioanalytica.net
+          - www.ioanalytica.org
+        secretName: ioanalytica.all-tls

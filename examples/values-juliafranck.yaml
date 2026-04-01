@@ -1,0 +1,58 @@
+# Example values for juliafranck.de (matches k3s-io/apps/websites/juliafranck.de).
+# Install with:
+#   helm install franck-site oci://ghcr.io/ioanalytica/charts/nginx-static \
+#     -n websites-static -f values-juliafranck.yaml
+
+fullnameOverride: franck-site
+
+image:
+  registry: harbor.ioanalytica.com
+  repository: io/websites/juliafranck.de
+  tag: "20260403"
+
+ingress:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    ingress.kubernetes.io/force-hsts: "true"
+    ingress.kubernetes.io/ssl-redirect: "true"
+  # juliafranck.de uses a slightly broader WP-ban list, so override the
+  # default server-snippet just for this release.
+  commonAnnotations:
+    nginx.ingress.kubernetes.io/whitelist-source-range: "0.0.0.0/0, ::/0"
+    nginx.ingress.kubernetes.io/server-snippet: |
+      # Dot-Ban: .env, .git, .htaccess etc.
+      location ~ /\. {
+        return 444;
+      }
+      # PHP-Ban: static site, no PHP
+      location ~ \.php$ {
+        return 444;
+      }
+      # WordPress-ban: block common WP scan paths
+      location ~* ^/(wp-admin|wp-includes|wp-content|wp-login\.php|wp-cron\.php|xmlrpc\.php) {
+        return 444;
+      }
+  hosts:
+    - host: juliafranck.de
+  tls:
+    - hosts:
+        - juliafranck.de
+      secretName: franck.de-tls
+
+redirects:
+  - name: aliases
+    targetUrl: https://juliafranck.de
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      ingress.kubernetes.io/force-hsts: "true"
+      ingress.kubernetes.io/ssl-redirect: "true"
+    hosts:
+      - juliafranck.com
+      - www.juliafranck.com
+      - www.juliafranck.de
+    tls:
+      - hosts:
+          - juliafranck.com
+          - www.juliafranck.com
+          - www.juliafranck.de
+        secretName: franck.all-tls

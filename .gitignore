@@ -1,4 +1,6 @@
 .*
 !.gitignore
 !.github
+!.helmignore
 *.tgz
+charts/

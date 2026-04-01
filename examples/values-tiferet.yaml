@@ -1,0 +1,41 @@
+# Example values for tiferet.net (matches k3s-io/apps/websites/tiferet).
+# Install with:
+#   helm install tiferet-site oci://ghcr.io/ioanalytica/charts/nginx-static \
+#     -n websites-static -f values-tiferet.yaml
+
+fullnameOverride: tiferet-site
+
+image:
+  registry: harbor.ioanalytica.com
+  repository: io/websites/tiferet
+  tag: "0.3.3"
+
+ingress:
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    ingress.kubernetes.io/force-hsts: "true"
+    ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - host: tiferet.net
+  tls:
+    - hosts:
+        - tiferet.net
+      secretName: tiferet.net-tls
+
+redirects:
+  - name: aliases
+    targetUrl: https://tiferet.net/de/
+    annotations:
+      cert-manager.io/cluster-issuer: letsencrypt-prod
+      ingress.kubernetes.io/force-hsts: "true"
+      ingress.kubernetes.io/ssl-redirect: "true"
+    hosts:
+      - tiferet.de
+      - www.tiferet.net
+      - www.tiferet.de
+    tls:
+      - hosts:
+          - tiferet.de
+          - www.tiferet.net
+          - www.tiferet.de
+        secretName: tiferet.all-tls
