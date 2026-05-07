@@ -4,13 +4,14 @@
 apiVersion: v2
 name: nginx-static
 version: 0.1.0
-appVersion: "1.0.0"
+appVersion: "0.1.0"
 type: application
 
 description: >-
   Helm chart for deploying a static nginx-served website with optional
-  HPA-driven scaling, a PodDisruptionBudget, a primary ingress, and any
-  number of optional redirect ingresses.
+  HPA-driven scaling, a PodDisruptionBudget, a primary ingress, and an
+  optional redirect ingress that maps any number of alias hosts to one
+  permanent-redirect target.
 
 home: https://github.com/ioanalytica/nginx-static
 sources:

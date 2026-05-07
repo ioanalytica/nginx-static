@@ -39,20 +39,20 @@ ingress:
         - juliafranck.de
       secretName: franck.de-tls
 
-redirects:
-  - name: aliases
-    targetUrl: https://juliafranck.de
-    annotations:
-      cert-manager.io/cluster-issuer: letsencrypt-prod
-      ingress.kubernetes.io/force-hsts: "true"
-      ingress.kubernetes.io/ssl-redirect: "true"
-    hosts:
-      - juliafranck.com
-      - www.juliafranck.com
-      - www.juliafranck.de
-    tls:
-      - hosts:
-          - juliafranck.com
-          - www.juliafranck.com
-          - www.juliafranck.de
-        secretName: franck.all-tls
+redirect:
+  enabled: true
+  targetUrl: https://juliafranck.de
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    ingress.kubernetes.io/force-hsts: "true"
+    ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - juliafranck.com
+    - www.juliafranck.com
+    - www.juliafranck.de
+  tls:
+    - hosts:
+        - juliafranck.com
+        - www.juliafranck.com
+        - www.juliafranck.de
+      secretName: franck.all-tls

@@ -16,15 +16,10 @@ Primary ingress hosts:
   - {{ .host }}
 {{- end }}
 {{- end }}
-{{- if .Values.redirects }}
+{{- if .Values.redirect.enabled }}
 
-Redirect ingresses:
-{{- range $i, $r := .Values.redirects }}
-{{- if and $r (default true $r.enabled) }}
-  - → {{ $r.targetUrl }} from:
-    {{- range $r.hosts }}
-    · {{ . }}
-    {{- end }}
-{{- end }}
+Redirect ingress: → {{ .Values.redirect.targetUrl }} from:
+{{- range .Values.redirect.hosts }}
+  · {{ . }}
 {{- end }}
 {{- end }}

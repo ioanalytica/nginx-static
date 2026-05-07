@@ -150,25 +150,31 @@ ingress:
   ##       - example.com
   ##     secretName: example-com-tls
 
-## @section Redirect ingresses
+## @section Redirect ingress
 ##
-## Optional list of redirect ingress objects. Each entry produces one Ingress
-## that responds to its hosts with a permanent redirect to targetUrl. The
-## ingress.commonAnnotations are merged in automatically; per-redirect
-## annotations override.
-redirects: []
+## Optional single redirect Ingress. Every host in redirect.hosts responds with
+## a permanent redirect to redirect.targetUrl (via the
+## nginx.ingress.kubernetes.io/permanent-redirect annotation). One Ingress means
+## one TLS list, which keeps cert-manager requests simple even with many alias
+## domains. ingress.commonAnnotations are merged automatically;
+## redirect.annotations override.
+redirect:
+  enabled: false
+  targetUrl: ""
+  annotations: {}
+  hosts: []
+  tls: []
 ## Example:
-## redirects:
-##   - name: aliases
-##     enabled: true
-##     targetUrl: https://example.com
-##     annotations:
-##       cert-manager.io/cluster-issuer: letsencrypt-prod
-##     hosts:
-##       - www.example.com
-##       - example.net
-##     tls:
-##       - hosts:
-##           - www.example.com
-##           - example.net
-##         secretName: example-aliases-tls
+## redirect:
+##   enabled: true
+##   targetUrl: https://example.com
+##   annotations:
+##     cert-manager.io/cluster-issuer: letsencrypt-prod
+##   hosts:
+##     - www.example.com
+##     - example.net
+##   tls:
+##     - hosts:
+##         - www.example.com
+##         - example.net
+##       secretName: example-aliases-tls

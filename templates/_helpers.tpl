@@ -14,24 +14,13 @@ Usage: {{ include "nginx-static.ingress.primaryAnnotations" . }}
 {{- end -}}
 
 {{/*
-Merged annotation map for a redirect ingress.
-Usage:
-  {{ include "nginx-static.ingress.redirectAnnotations" (dict "redirect" $r "context" $) }}
+Merged annotation map for the redirect ingress: ingress.commonAnnotations +
+auto-injected permanent-redirect + redirect.annotations.
+Usage: {{ include "nginx-static.ingress.redirectAnnotations" . }}
 */}}
 {{- define "nginx-static.ingress.redirectAnnotations" -}}
-{{- $ctx := .context -}}
-{{- $r := .redirect -}}
-{{- $base := default (dict) $ctx.Values.ingress.commonAnnotations -}}
-{{- $auto := dict "nginx.ingress.kubernetes.io/permanent-redirect" $r.targetUrl -}}
-{{- $extra := default (dict) $r.annotations -}}
+{{- $base := default (dict) .Values.ingress.commonAnnotations -}}
+{{- $auto := dict "nginx.ingress.kubernetes.io/permanent-redirect" .Values.redirect.targetUrl -}}
+{{- $extra := default (dict) .Values.redirect.annotations -}}
 {{- mergeOverwrite (deepCopy $base) $auto $extra | toYaml -}}
-{{- end -}}
-
-{{/*
-Stable name suffix for a redirect ingress.
-Usage: {{ include "nginx-static.redirect.name" (dict "redirect" $r "index" $i "context" $) }}
-*/}}
-{{- define "nginx-static.redirect.name" -}}
-{{- $suffix := default (printf "%d" (add .index 1)) .redirect.name -}}
-{{- printf "%s-redirect-%s" (include "common.names.fullname" .context) $suffix | trunc 63 | trimSuffix "-" -}}
 {{- end -}}

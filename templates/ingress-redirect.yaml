@@ -1,0 +1,35 @@
+{{/*
+Copyright IO ANALYTICA. All Rights Reserved.
+SPDX-License-Identifier: Apache-2.0
+
+Optional redirect Ingress. Every host in .Values.redirect.hosts is sent a
+permanent redirect to .Values.redirect.targetUrl. A single Ingress is used so
+all redirect hosts share one TLS list (and thus one cert-manager request).
+*/}}
+{{- if .Values.redirect.enabled }}
+{{- if not .Values.redirect.targetUrl }}
+{{- fail "redirect.targetUrl is required when redirect.enabled is true" }}
+{{- end }}
+{{- if not .Values.redirect.hosts }}
+{{- fail "redirect.hosts must not be empty when redirect.enabled is true" }}
+{{- end }}
+apiVersion: {{ include "common.capabilities.ingress.apiVersion" . }}
+kind: Ingress
+metadata:
+  name: {{ include "common.names.fullname" . }}-redirect
+  namespace: {{ include "common.names.namespace" . | quote }}
+  labels: {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 4 }}
+  annotations:
+    {{- include "common.tplvalues.render" (dict "value" (include "nginx-static.ingress.redirectAnnotations" . | fromYaml) "context" $) | nindent 4 }}
+spec:
+  {{- if and .Values.ingress.className (eq "true" (include "common.ingress.supportsIngressClassname" .)) }}
+  ingressClassName: {{ .Values.ingress.className | quote }}
+  {{- end }}
+  rules:
+    {{- range .Values.redirect.hosts }}
+    - host: {{ . | quote }}
+    {{- end }}
+  {{- with .Values.redirect.tls }}
+  tls: {{- include "common.tplvalues.render" (dict "value" . "context" $) | nindent 4 }}
+  {{- end }}
+{{- end }}

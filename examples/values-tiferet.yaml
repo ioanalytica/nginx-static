@@ -22,20 +22,20 @@ ingress:
         - tiferet.net
       secretName: tiferet.net-tls
 
-redirects:
-  - name: aliases
-    targetUrl: https://tiferet.net/de/
-    annotations:
-      cert-manager.io/cluster-issuer: letsencrypt-prod
-      ingress.kubernetes.io/force-hsts: "true"
-      ingress.kubernetes.io/ssl-redirect: "true"
-    hosts:
-      - tiferet.de
-      - www.tiferet.net
-      - www.tiferet.de
-    tls:
-      - hosts:
-          - tiferet.de
-          - www.tiferet.net
-          - www.tiferet.de
-        secretName: tiferet.all-tls
+redirect:
+  enabled: true
+  targetUrl: https://tiferet.net/de/
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    ingress.kubernetes.io/force-hsts: "true"
+    ingress.kubernetes.io/ssl-redirect: "true"
+  hosts:
+    - tiferet.de
+    - www.tiferet.net
+    - www.tiferet.de
+  tls:
+    - hosts:
+        - tiferet.de
+        - www.tiferet.net
+        - www.tiferet.de
+      secretName: tiferet.all-tls

@@ -11,7 +11,7 @@ Each release renders:
 - An optional `HorizontalPodAutoscaler` (CPU and/or memory based, plus arbitrary extra metrics) with a configurable `behavior` block — this is how scaling is driven from values.
 - An optional `PodDisruptionBudget`.
 - An optional primary `Ingress`.
-- An optional list of redirect `Ingress` objects, each pointing a set of hosts at one `targetUrl` via `nginx.ingress.kubernetes.io/permanent-redirect`.
+- An optional redirect `Ingress` that points any number of alias hosts at one `targetUrl` via `nginx.ingress.kubernetes.io/permanent-redirect`. One Ingress means one TLS list, so cert-manager issues a single SAN cert for all aliases.
 
 ## Install
 
@@ -51,28 +51,32 @@ autoscaling:
 
 When `autoscaling.enabled: false`, the deployment uses `replicaCount` instead.
 
-## Redirect ingresses
+## Redirect ingress
 
-Redirects are optional and per-release. Each entry produces one Ingress with
-its hosts redirected to `targetUrl`. The chart's `ingress.commonAnnotations`
-(default: WAF-style snippet blocking dotfiles, PHP, and common WordPress scan
-paths) are merged into every redirect; per-redirect `annotations` override.
+A release optionally renders one redirect `Ingress` covering every alias host.
+All hosts share the same `targetUrl` (the only thing
+`nginx.ingress.kubernetes.io/permanent-redirect` accepts) and the same TLS list,
+which keeps cert-manager requests simple even with dozens of aliases. The
+chart's `ingress.commonAnnotations` (default: WAF-style snippet blocking
+dotfiles, PHP, and common WordPress scan paths) are merged in;
+`redirect.annotations` override.
 
 ```yaml
-redirects:
-  - name: aliases
-    targetUrl: https://example.com
-    annotations:
-      cert-manager.io/cluster-issuer: letsencrypt-prod
-    hosts:
-      - www.example.com
-      - example.net
-    tls:
-      - hosts: [www.example.com, example.net]
-        secretName: example-aliases-tls
+redirect:
+  enabled: true
+  targetUrl: https://example.com
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - www.example.com
+    - example.net
+  tls:
+    - hosts: [www.example.com, example.net]
+      secretName: example-aliases-tls
 ```
 
-Set `enabled: false` on an entry to keep it in values without rendering it.
+Set `redirect.enabled: false` (the default) to skip the redirect Ingress
+entirely.
 
 ## Values reference
 
@@ -89,7 +93,8 @@ See [`values.yaml`](./values.yaml) for the full schema and defaults.
 | `pdb.enabled` | `true` | Disables the PodDisruptionBudget when false. |
 | `ingress.commonAnnotations` | dotfile/PHP/WP server-snippet | Merged into primary + redirect ingresses. |
 | `ingress.hosts` | `[example.com]` | Hosts and paths for the primary ingress. |
-| `redirects` | `[]` | Optional list of redirect ingresses (see above). |
+| `redirect.enabled` | `false` | Render a single redirect Ingress for `redirect.hosts`. |
+| `redirect.targetUrl` | `""` | Required when `redirect.enabled` is true. |
 
 ## License
 
