@@ -119,7 +119,6 @@ ingress:
   ## Annotations applied to BOTH the primary ingress and every redirect.
   ## Override or extend per-ingress via ingress.annotations / redirects[].annotations.
   commonAnnotations:
-    nginx.ingress.kubernetes.io/whitelist-source-range: "0.0.0.0/0, ::/0"
     nginx.ingress.kubernetes.io/server-snippet: |
       # Dot-Ban: .env, .git, .htaccess etc.
       location ~ /\. {
