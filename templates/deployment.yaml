@@ -38,7 +38,12 @@ spec:
       affinity: {{- toYaml . | nindent 8 }}
       {{- end }}
       containers:
-        - name: {{ include "common.names.name" . }}
+        ## Use fullname (release-scoped) so the container name is unique per
+        ## release. Logs scrapers that derive a `job` label from the container
+        ## directory in /var/log/pods/<ns>_<pod>/<container>/ (e.g. our Alloy
+        ## config in k3s-io) then get one stream per release instead of
+        ## collapsing every nginx-static install into the same slot.
+        - name: {{ include "common.names.fullname" . }}
           image: {{ include "common.images.image" (dict "imageRoot" .Values.image "global" .Values.global "chart" .Chart) | quote }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           {{- with .Values.containerSecurityContext }}
