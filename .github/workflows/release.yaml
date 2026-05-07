@@ -27,6 +27,12 @@ jobs:
         id: package
         run: |
           helm dependency update .
+          # Helm v4 requires dependencies to be unpacked under charts/<name>/;
+          # the .tgz form that `helm dependency update` produces is no longer
+          # accepted by `helm package`. Unpack before packaging.
+          for tgz in charts/*.tgz; do
+            tar -xzf "$tgz" -C charts/ && rm "$tgz"
+          done
           helm package .
           NAME=$(grep '^name:' Chart.yaml | awk '{print $2}' | tr -d '"')
           VERSION=$(grep '^version:' Chart.yaml | awk '{print $2}' | tr -d '"')
