@@ -1,8 +1,14 @@
 {{/*
 Copyright IO ANALYTICA. All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0
+
+Primary Ingress. Identical shape regardless of ingress.className — both
+the kubernetesIngress (Traefik) and rke2-ingress-nginx providers honour
+kind:Ingress with spec.ingressClassName, and cert-manager's ingress-shim
+issues TLS certs from the annotation regardless of the class.
 */}}
 {{- if .Values.ingress.enabled }}
+{{- include "nginx-static.ingress.validateClass" . }}
 apiVersion: {{ include "common.capabilities.ingress.apiVersion" . }}
 kind: Ingress
 metadata:

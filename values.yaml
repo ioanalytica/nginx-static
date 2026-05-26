@@ -113,7 +113,33 @@ service:
 ##
 ingress:
   enabled: true
-  className: nginx
+  ## REQUIRED. Must be set explicitly; defaulting in mixed-controller
+  ## clusters is unsafe. Supported values:
+  ##   - "nginx":         rke2-ingress-nginx controller serves the
+  ##                      primary + redirect (kind:Ingress). cert-manager
+  ##                      ingress-shim issues TLS via Ingress annotations.
+  ##                      Redirect drops the request path
+  ##                      (nginx-ingress limitation, no path preservation
+  ##                      mechanism available).
+  ##   - "nginx-traefik": Traefik's kubernetesIngressNGINX bridge
+  ##                      provider serves the primary (kind:Ingress, the
+  ##                      bridge translates 85+ nginx-style annotations).
+  ##                      Because Traefik is present, the chart emits
+  ##                      the redirect in the SAME path-preserving form
+  ##                      as "traefik" (kind:Middleware +
+  ##                      kind:IngressRoute, RedirectRegex with capture
+  ##                      group). + kind:Certificate when the
+  ##                      cert-manager.io/cluster-issuer annotation is
+  ##                      set (ingress-shim doesn't watch IngressRoute).
+  ##                      Pick this when commonAnnotations /
+  ##                      ingress.annotations carry nginx-specific
+  ##                      hints worth keeping during migration.
+  ##   - "traefik":       Traefik's kubernetesIngress provider serves
+  ##                      the primary (kind:Ingress, cert-shim still
+  ##                      works); the redirect is rendered as
+  ##                      kind:Middleware + kind:IngressRoute (+ optional
+  ##                      kind:Certificate). Path-preserving.
+  className: ""
   pathType: ImplementationSpecific
 
   ## Annotations applied to BOTH the primary ingress and every redirect.

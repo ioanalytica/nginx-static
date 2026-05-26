@@ -2,17 +2,29 @@
 Copyright IO ANALYTICA. All Rights Reserved.
 SPDX-License-Identifier: Apache-2.0
 
-Optional redirect Ingress. Every host in .Values.redirect.hosts is sent a
-permanent redirect to .Values.redirect.targetUrl. A single Ingress is used so
-all redirect hosts share one TLS list (and thus one cert-manager request).
+Optional redirect Ingress — ONLY rendered for ingress.className == "nginx"
+(rke2-ingress-nginx, no Traefik present).
+
+For className "nginx-traefik" and "traefik" the redirect is rendered as
+Middleware + IngressRoute (path-preserving) in
+ingressroute-redirect.yaml. Both presume Traefik is present in the
+cluster, so the path-preserving form is always available there.
+
+Every host in .Values.redirect.hosts is sent a permanent redirect to
+.Values.redirect.targetUrl. A single Ingress is used so all redirect hosts
+share one TLS list (and thus one cert-manager request). The redirect drops
+the request path — limitation of the `permanent-redirect` annotation in
+nginx-ingress.
 */}}
 {{- if .Values.redirect.enabled }}
+{{- include "nginx-static.ingress.validateClass" . }}
 {{- if not .Values.redirect.targetUrl }}
 {{- fail "redirect.targetUrl is required when redirect.enabled is true" }}
 {{- end }}
 {{- if not .Values.redirect.hosts }}
 {{- fail "redirect.hosts must not be empty when redirect.enabled is true" }}
 {{- end }}
+{{- if eq .Values.ingress.className "nginx" }}
 apiVersion: {{ include "common.capabilities.ingress.apiVersion" . }}
 kind: Ingress
 metadata:
@@ -32,4 +44,5 @@ spec:
   {{- with .Values.redirect.tls }}
   tls: {{- include "common.tplvalues.render" (dict "value" . "context" $) | nindent 4 }}
   {{- end }}
+{{- end }}
 {{- end }}

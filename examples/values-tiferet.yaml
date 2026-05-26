@@ -11,6 +11,7 @@ image:
   tag: "0.3.3"
 
 ingress:
+  className: nginx   # or "traefik" for path-preserving redirects
   annotations:
     cert-manager.io/cluster-issuer: letsencrypt-prod
     ingress.kubernetes.io/force-hsts: "true"
