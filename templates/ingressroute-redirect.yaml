@@ -42,6 +42,9 @@ metadata:
   name: {{ include "nginx-static.redirect.middlewareName" . }}
   namespace: {{ include "common.names.namespace" . | quote }}
   labels: {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 4 }}
+  {{- if or .Values.ingress.commonAnnotations .Values.redirect.annotations }}
+  annotations: {{- include "common.tplvalues.render" (dict "value" (include "nginx-static.redirect.traefikAnnotations" . | fromYaml) "context" $) | nindent 4 }}
+  {{- end }}
 spec:
   redirectRegex:
     regex: "^https?://[^/]+(/.*)?$"
@@ -54,6 +57,9 @@ metadata:
   name: {{ include "common.names.fullname" . }}-redirect
   namespace: {{ include "common.names.namespace" . | quote }}
   labels: {{- include "common.labels.standard" (dict "customLabels" .Values.commonLabels "context" $) | nindent 4 }}
+  {{- if or .Values.ingress.commonAnnotations .Values.redirect.annotations }}
+  annotations: {{- include "common.tplvalues.render" (dict "value" (include "nginx-static.redirect.traefikAnnotations" . | fromYaml) "context" $) | nindent 4 }}
+  {{- end }}
 spec:
   ingressClassName: traefik
   entryPoints:

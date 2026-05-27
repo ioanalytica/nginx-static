@@ -89,6 +89,22 @@ Usage: {{ include "nginx-static.redirect.middlewareName" . }}
 {{- end -}}
 
 {{/*
+Merged annotation map for the chart-emitted redirect resources on the
+TRAEFIK path (Middleware, IngressRoute, Certificate):
+ingress.commonAnnotations + redirect.annotations. Mirrors the convention
+that every chart-emitted resource carries commonAnnotations, plus the
+redirect-specific annotation overrides. No auto-injected nginx
+permanent-redirect on this path (that's nginx-only, handled separately
+by redirectAnnotations).
+Usage: {{ include "nginx-static.redirect.traefikAnnotations" . }}
+*/}}
+{{- define "nginx-static.redirect.traefikAnnotations" -}}
+{{- $base := default (dict) .Values.ingress.commonAnnotations -}}
+{{- $extra := default (dict) .Values.redirect.annotations -}}
+{{- mergeOverwrite (deepCopy $base) $extra | toYaml -}}
+{{- end -}}
+
+{{/*
 Returns the cluster-issuer name from redirect.annotations, or empty string.
 Used to decide whether to emit a Certificate CR for the redirect (class=traefik).
 Usage: {{ include "nginx-static.redirect.clusterIssuer" . }}
