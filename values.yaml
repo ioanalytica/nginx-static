@@ -144,20 +144,17 @@ ingress:
 
   ## Annotations applied to BOTH the primary ingress and every redirect.
   ## Override or extend per-ingress via ingress.annotations / redirects[].annotations.
-  commonAnnotations:
-    nginx.ingress.kubernetes.io/server-snippet: |
-      # Dot-Ban: .env, .git, .htaccess etc.
-      location ~ /\. {
-        return 444;
-      }
-      # PHP-Ban: static site, no PHP
-      location ~ \.php$ {
-        return 444;
-      }
-      # WordPress-ban: block common WP scan paths
-      location ~* ^/(wp-admin|wp-includes|wp-content|wp-login\.php|wp-cron\.php|xmlrpc\.php) {
-        return 444;
-      }
+  ##
+  ## Note: this chart previously injected a default
+  ## `nginx.ingress.kubernetes.io/server-snippet` here (dot-ban + PHP-ban
+  ## + WP-scan-ban). That snippet was only effective when served by
+  ## ingress-nginx and silently ignored by Traefik. The equivalent
+  ## protection is now expected to live in the site image's nginx
+  ## configuration (e.g. `custom.d/02-userconfig.conf`), where it runs
+  ## regardless of which ingress controller fronts the pod. Set
+  ## commonAnnotations explicitly here if you need extra annotations
+  ## applied across all chart-emitted resources.
+  commonAnnotations: {}
 
   ## Extra annotations merged on top of commonAnnotations for the primary ingress only
   annotations: {}
