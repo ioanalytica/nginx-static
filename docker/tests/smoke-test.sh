@@ -111,9 +111,16 @@ etc/os-release
 etc/passwd
 lib/apk/db/installed
 usr/sbin/nginx
-var/www/html/index.html
+usr/share/nginx-static/placeholder.html
 LIST
 )"
+# The document root is there and empty, and it is the site's to fill. GNU
+# tar prints the owner as 101/101, bsdtar in two columns.
+if docker export "$NAME-files" | tar -tvf - | grep -E ' (\./)?var/www/html/$' | grep -qE '^drwxr-xr-x.* 101[ /]+101 '; then
+    ok "the document root is an empty directory of user 101"
+else
+    fail "var/www/html is missing or not a directory of user 101"
+fi
 if [ "$files" = "$want" ]; then ok "the image holds NGINX, its configuration and nothing else ($(wc -l <<<"$files" | tr -d ' ') files)"
 else
     fail "the image's files differ from the list:"
@@ -149,7 +156,11 @@ ports="$(docker inspect "$IMAGE" --format '{{range $p, $_ := .Config.ExposedPort
 [ "$ports" = "8080/tcp " ] && ok "the image exposes port 8080 only" || fail "the image exposes '$ports'"
 
 echo "=== Requests"
-assert "the default page"                      200 /            "nginx-static base image"
+assert "the placeholder, while there is no site" 200 /            "nginx-static base image"
+# The document root is empty: the placeholder has no address of its own that
+# a site's image would inherit.
+assert "the placeholder is no file of the site" 404 /index.html
+assert "and its location is internal"          404 /nginx-static-placeholder
 assert "the liveness probe's path"             200 /healthz     "OK"
 assert "a file that is not there"              404 /nope
 assert "a hidden file"                         403 /.env
@@ -191,7 +202,9 @@ else
     fail "IMAGE -t: $out"
 fi
 PORT="$(start "$NAME-site" "$SITE_IMAGE")"
-assert "the site's page takes the place of the default one" 200 /         "The site of the smoke test"
+assert "the site's page takes the place of the placeholder" 200 /         "The site of the smoke test"
+assert "the site's page under its own name"                 200 /index.html "The site of the smoke test"
+assert "the placeholder is not part of the site"            404 /nginx-static-placeholder
 assert "the site's stylesheet"                              200 /style.css "color"
 assert "the site's own location"                            301 /old
 assert "a path the site refuses"                            418 /index.php
