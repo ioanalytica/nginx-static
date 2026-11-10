@@ -161,6 +161,7 @@ assert "the placeholder, while there is no site" 200 /            "nginx-static 
 # a site's image would inherit.
 assert "the placeholder is no file of the site" 404 /index.html
 assert "and its location is internal"          404 /nginx-static-placeholder
+assert "the placeholder answers GET and HEAD only" 405 / "" -X POST
 assert "the liveness probe's path"             200 /healthz     "OK"
 assert "a file that is not there"              404 /nope
 assert "a hidden file"                         403 /.env
