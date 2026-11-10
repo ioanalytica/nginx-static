@@ -1,0 +1,18 @@
+# Artifact Hub repository metadata for the chart.
+#
+# The tag job of .github/workflows/release.yml pushes this file to the tag
+# `artifacthub.io` of oci://ghcr.io/ioanalytica/charts/nginx-static with
+# every release tag. Artifact Hub reads it when the repository has a new
+# version, so a change here takes effect with the next release.
+# Format: https://github.com/artifacthub/hub/blob/master/docs/metadata/artifacthub-repo.yml
+#
+# No repositoryID yet: the repository is not registered on Artifact Hub. Once
+# it is, its ID from the control panel goes here as `repositoryID:`; a match
+# marks it as a verified publisher.
+
+# Every version with a -suffix is left out of the listing: a release
+# candidate (0.3.0-rc.1). Artifact Hub shows the highest version as the
+# latest, a candidate above the last release included.
+ignore:
+  - name: nginx-static
+    version: '-'

@@ -1,0 +1,299 @@
+name: Release
+
+# A tag push is a release: the chart is packaged, pushed to GHCR under its
+# digest, signed, and only then tagged. Nothing here runs for a branch push
+# or a pull request; those are test.yml's business.
+#
+#   gate ─ prep ─ chart ─ sign ─ tag ─┬─ release
+#                                     └─ try-locally
+#
+# The tag is the chart version in chart/Chart.yaml, or a release candidate of
+# it: X.Y.Z-rc.N goes on the commit whose chart/Chart.yaml says X.Y.Z, the
+# commit X.Y.Z is tagged on once the candidate has passed
+# (scripts/check-release-tag.sh). tests/ci/test.sh guards this file.
+on:
+  push:
+    tags: ['*']
+
+permissions: {}
+
+env:
+  REGISTRY: ghcr.io
+  OWNER: ioanalytica
+  # Whom a release's signature names (the sign job): this workflow, run for
+  # the release's tag, which follows this prefix. The README ("Verify a
+  # release") gives users the same identity.
+  SIGNER: 'https://github.com/ioanalytica/nginx-static/.github/workflows/release.yml@refs/tags/'
+
+jobs:
+  # Green tests are a precondition for publishing: everything below that
+  # publishes sits downstream of this job.
+  gate:
+    uses: ./.github/workflows/test.yml
+    permissions:
+      contents: read
+
+  # The tag check. The workflow only triggers on tags; the per-job refs/tags
+  # guards stay anyway, so a future trigger cannot quietly turn a branch push
+  # into a release.
+  prep:
+    needs: gate
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Tag must match the chart version
+        run: scripts/check-release-tag.sh "$GITHUB_REF_NAME"
+      - uses: ./.github/actions/setup-oras
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # A tag pushed a second time stops here, before anything is built.
+      - name: The version must not be published yet
+        run: scripts/release-unpublished.sh "$GITHUB_REF_NAME" "$REGISTRY/$OWNER/charts/nginx-static"
+
+  chart:
+    # The chart goes into its repository under its digest alone; the tag job
+    # gives it its version once it is signed.
+    needs: prep
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      packages: write
+    # helm push tags the chart's version as it pushes, so it pushes into this
+    # registry on the runner, which goes with the job; oras copies the chart
+    # from there into GHCR (the push step below).
+    services:
+      registry:
+        image: registry:3.1.2@sha256:d4032d4cc323c1731c707931ecada07a53076eac38e3b61ae57533f170f2c6c3
+        ports:
+          - 5000:5000
+    outputs:
+      digest: ${{ steps.push.outputs.digest }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # helm gets its own registry login; nothing needs a token left in
+          # .git/config.
+          persist-credentials: false
+      # Pinned: without a version the action asks the GitHub API for the
+      # latest release on every run.
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        with:
+          version: v4.3.1
+      # This job is the one that would do the damage: package the version in
+      # the file and overwrite it in the registry. It runs the check of its
+      # own, so that it holds whatever comes to stand between prep and here.
+      - name: Tag must match the chart version
+        run: scripts/check-release-tag.sh "$GITHUB_REF_NAME"
+      # A release candidate is tagged on the commit its release will be
+      # tagged on, whose Chart.yaml says X.Y.Z: its chart gets the tag's
+      # version.
+      - name: Chart version from the tag
+        run: scripts/chart-release-version.sh "$GITHUB_REF_NAME"
+      # What Artifact Hub shows for this version: its changes, from the
+      # changelog entry, and whether it is a prerelease. Written into the
+      # chart before it is linted and packaged, so the pushed and signed
+      # chart carries them.
+      - name: Artifact Hub annotations
+        run: scripts/artifacthub-annotations.sh "$GITHUB_REF_NAME"
+      # chart/charts/ is gitignored, so the common dependency has to be
+      # resolved before the chart can be linted or packaged.
+      - name: Lint and package
+        run: |
+          mkdir -p "$RUNNER_TEMP/chart"
+          helm dependency update chart/
+          helm lint chart/ --set ingress.className=nginx
+          helm package chart/ --destination "$RUNNER_TEMP/chart"
+      # The release job attaches this very file, the bytes of the chart layer
+      # pushed below and then signed. Kept as long as GitHub lets a run's
+      # failed jobs be re-run. A re-run of this job after a failed push
+      # packages again and replaces the package of the failed attempt
+      # (overwrite): the new package is the one that gets pushed and signed.
+      - name: Hand the package to the release job
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: chart
+          path: ${{ runner.temp }}/chart/nginx-static-*.tgz
+          if-no-files-found: error
+          retention-days: 30
+          overwrite: true
+      - uses: ./.github/actions/setup-oras
+      # helm pushes into the job's own registry, and names the manifest it
+      # pushed ("Digest: sha256:…", on its standard output as of Helm 4; the
+      # step fails when it finds none). oras copies that digest into
+      # charts/nginx-static under no tag; content-addressed, the copy has the
+      # same digest. The sign job signs it, and the tag job tags it.
+      - name: Push the chart to GHCR by digest
+        id: push
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ACTOR: ${{ github.actor }}
+        run: |
+          curl -fsS --retry 10 --retry-delay 1 --retry-connrefused -o /dev/null http://localhost:5000/v2/
+          out="$(helm push "$RUNNER_TEMP"/chart/nginx-static-*.tgz oci://localhost:5000/charts --plain-http)"
+          echo "$out"
+          digest="$(sed -n 's/^Digest: \(sha256:[0-9a-f]\{64\}\)$/\1/p' <<<"$out")"
+          [ -n "$digest" ] || { echo "helm push reported no digest" >&2; exit 1; }
+          echo "$TOKEN" | oras login "$REGISTRY" -u "$ACTOR" --password-stdin
+          oras cp --from-plain-http "localhost:5000/charts/nginx-static@$digest" "$REGISTRY/$OWNER/charts/nginx-static"
+          echo "digest=$digest" >> "$GITHUB_OUTPUT"
+
+  # A keyless Sigstore signature for the chart, by its digest: a tag can be
+  # moved to another manifest, the digest is what was built, and until the
+  # tag job the chart has no tag. Fulcio certifies this job's GitHub OIDC
+  # token, the certificate names this workflow at the release tag, and the
+  # signature is logged in the public Rekor instance. The one job with an
+  # OIDC token.
+  sign:
+    needs: chart
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-26.04
+    # Signing and verifying take seconds; an unreachable Sigstore service
+    # must not hold the release run for hours.
+    timeout-minutes: 10
+    permissions:
+      packages: write        # cosign stores the signature next to the chart
+      id-token: write        # the token Fulcio issues the signing certificate for
+    steps:
+      - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
+        with:
+          cosign-release: v3.1.4
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Verified right away with the command the README gives users, so a
+      # release cannot publish a signature that check fails on.
+      - name: Sign by digest
+        env:
+          CHART: ${{ env.REGISTRY }}/${{ env.OWNER }}/charts/nginx-static@${{ needs.chart.outputs.digest }}
+        run: |
+          cosign sign --yes "$CHART"
+          cosign verify "$CHART" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            --certificate-identity "$SIGNER$GITHUB_REF_NAME" >/dev/null
+
+  # The tags of the release, set once the chart is signed: Artifact Hub's
+  # repository metadata, and the chart's version last. Until here the chart
+  # sits in GHCR under its digest alone, so no tag names an unsigned one:
+  # Artifact Hub indexes a chart version when its tag appears, and does not
+  # check it again while its digest stays the same. A failed sign job leaves
+  # no tag behind; a re-run of this job sets the same tag on the same digest
+  # again.
+  tag:
+    needs: [chart, sign]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    # One tag job at a time across runs: reading which run a tag names and
+    # moving it are two steps. The others wait in line instead of GitHub's
+    # one pending job, which a third would cancel.
+    concurrency:
+      group: release-tag
+      queue: max
+    permissions:
+      contents: read         # artifacthub-repo.yml and the oras action
+      packages: write        # tag the chart
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-oras
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # Artifact Hub reads artifacthub-repo.yml from the tag `artifacthub.io`
+      # of the chart's repository, as the layer of an ORAS artifact. It reads
+      # it when a new version appears, so it goes up before the chart's
+      # version. Not a semver tag: Helm, Flux and Artifact Hub's own version
+      # list pass over it. It moves forward only: a later run's metadata
+      # stays.
+      - name: Artifact Hub repository metadata
+        run: scripts/release-artifacthub-metadata.sh "$REGISTRY/$OWNER/charts/nginx-static" "$GITHUB_RUN_NUMBER"
+      # The tag is the version check-release-tag.sh matched against the
+      # chart's, and the version chart-release-version.sh packaged. A version
+      # the registry has on another digest stops the job.
+      - name: Tag the chart
+        env:
+          CHART: ${{ env.REGISTRY }}/${{ env.OWNER }}/charts/nginx-static@${{ needs.chart.outputs.digest }}
+        run: scripts/release-tag-once.sh "$CHART" "$GITHUB_REF_NAME"
+
+  # The GitHub Release comes last, once the signature verified and the tag is
+  # set: a release page must not announce a chart that fails the check the
+  # README gives users, or that cannot be pulled by its version yet. A failed
+  # sign or tag job leaves no release behind; re-running it publishes one.
+  release:
+    needs: [chart, sign, tag]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-26.04
+    timeout-minutes: 10
+    # One release job at a time across runs: reading which releases are
+    # published and marking this one as Latest are two steps.
+    concurrency:
+      group: release-publish
+      queue: max
+    permissions:
+      contents: write        # create the GitHub Release
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The release step gets its token through the action.
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: chart
+          path: ${{ runner.temp }}/chart
+      - name: Release notes from the changelog
+        run: scripts/changelog-section.sh "$GITHUB_REF_NAME" > "$RUNNER_TEMP/release-notes.md"
+      # Latest is the release with the highest version, not the one whose
+      # job ran last: a late re-run of an older release's failed job must
+      # not take it back from a newer release.
+      - name: Is this the newest release?
+        id: newest
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          published="$(gh api --paginate "repos/$GITHUB_REPOSITORY/releases" --jq '.[] | select(.draft or .prerelease | not) | .tag_name')"
+          latest="$(scripts/release-is-latest.sh "$GITHUB_REF_NAME" <<<"$published")"
+          echo "latest=$latest" | tee -a "$GITHUB_OUTPUT"
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@8a0cd651e5b2365bd640854a3fa5dfc70e4875f3 # v3.0.4
+        with:
+          name: Version ${{ github.ref_name }}
+          files: ${{ runner.temp }}/chart/nginx-static-*.tgz
+          # The changelog entry, followed by GitHub's generated list of pull
+          # requests and the compare link.
+          body_path: ${{ runner.temp }}/release-notes.md
+          generate_release_notes: true
+          # A version with a -suffix is a release candidate, never the
+          # repository's Latest release.
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          make_latest: ${{ steps.newest.outputs.latest }}
+
+  # The page "Try it locally" against what this tag published: the chart at
+  # the tag's version, pulled from the registry, with the page and
+  # examples/k3d/ of the tag's commit. After the tagging, so the page meets
+  # the chart as users get it, signed and tagged; beside the release, and
+  # nothing may `needs:` it: a flaky k3d run must not hold up a release.
+  try-locally:
+    needs: tag
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: read
+    uses: ./.github/workflows/try-locally.yml
+    with:
+      chart-version: ${{ github.ref_name }}

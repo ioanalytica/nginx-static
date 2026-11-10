@@ -1,0 +1,20 @@
+{
+  "name": "nginx-static-site",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The nginx-static documentation site",
+  "license": "Apache-2.0",
+  "scripts": {
+    "dev": "vitepress dev .",
+    "build": "vitepress build .",
+    "preview": "vitepress preview ."
+  },
+  "devDependencies": {
+    "@fontsource/jost": "5.3.0",
+    "vitepress": "1.6.4"
+  },
+  "overrides": {
+    "vite": "6.4.5"
+  }
+}

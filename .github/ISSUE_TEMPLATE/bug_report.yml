@@ -1,0 +1,53 @@
+name: Bug report
+description: Something in the chart does not work as documented.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for the report. A security issue goes to a [private report](https://github.com/ioanalytica/nginx-static/security/advisories/new) instead.
+  - type: input
+    id: version
+    attributes:
+      label: Chart version
+      description: The chart version, as `helm list` shows it.
+      placeholder: "0.3.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Where is the problem?
+      options:
+        - Deployment, Service, autoscaling
+        - Ingress of the site
+        - Redirect
+        - Values schema
+        - Documentation
+        - Not sure
+    validations:
+      required: true
+  - type: input
+    id: kubernetes
+    attributes:
+      label: Kubernetes and ingress controller
+      description: Distribution and version, the ingress controller with its version, and the value of `ingress.className`.
+      placeholder: "k3s v1.37.2 with Traefik 3.7, class traefik"
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened, and what did you expect?
+    validations:
+      required: true
+  - type: textarea
+    id: values
+    attributes:
+      label: Values
+      description: The chart values that differ from the defaults, with hosts and registry names removed where they are private.
+      render: yaml
+  - type: textarea
+    id: logs
+    attributes:
+      label: Output
+      description: What Helm printed, or the events and logs around the failure (`kubectl describe`, `kubectl logs`).
+      render: text

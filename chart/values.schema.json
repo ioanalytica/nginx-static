@@ -1,0 +1,592 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$comment": "Copyright IO ANALYTICA. SPDX-License-Identifier: Apache-2.0",
+  "title": "nginx-static",
+  "description": "The values of the nginx-static chart, documented in values.yaml. Helm checks them against this schema on install, upgrade, template and lint. The schema is permissive on purpose: no key is required and none refused for not being listed, so a key the schema does not know is left to the chart; numbers also pass as text, as --set-string delivers them, and annotations the chart renders as templates also pass as text. It refuses an ingress class or a resources preset other than the listed ones, a malformed entry of ingress.hosts, and a value of another kind than the chart reads (a list where it reads a switch, text where it reads a map).",
+  "type": "object",
+  "properties": {
+    "global": {
+      "title": "Global parameters",
+      "type": "object",
+      "properties": {
+        "imageRegistry": {
+          "description": "Global image registry; replaces image.registry when set",
+          "type": "string",
+          "default": ""
+        },
+        "imagePullSecrets": {
+          "description": "Global registry secret names as an array",
+          "type": "array",
+          "default": []
+        }
+      }
+    },
+    "nameOverride": {
+      "description": "String to partially override the release's resource names",
+      "type": "string",
+      "default": ""
+    },
+    "fullnameOverride": {
+      "description": "String to fully override the release's resource names",
+      "type": "string",
+      "default": ""
+    },
+    "namespaceOverride": {
+      "description": "String to override the namespace the resources are deployed to",
+      "type": "string",
+      "default": ""
+    },
+    "kubeVersion": {
+      "description": "Kubernetes version the chart renders for, instead of the cluster's",
+      "type": "string",
+      "default": ""
+    },
+    "commonLabels": {
+      "description": "Labels to add to all deployed objects",
+      "type": "object",
+      "default": {}
+    },
+    "commonAnnotations": {
+      "description": "Annotations to add to the Deployment, Service, HPA and PodDisruptionBudget",
+      "type": [
+        "object",
+        "string"
+      ],
+      "default": {}
+    },
+    "image": {
+      "title": "Image of the site",
+      "type": "object",
+      "properties": {
+        "registry": {
+          "description": "Registry of the site's image",
+          "type": "string",
+          "default": "harbor.ioanalytica.com"
+        },
+        "repository": {
+          "description": "Repository of the site's image",
+          "type": "string",
+          "default": "io/websites/example"
+        },
+        "tag": {
+          "description": "Tag of the site's image; set it for every release (empty falls back to the chart's appVersion, which names no site image)",
+          "type": "string",
+          "default": ""
+        },
+        "digest": {
+          "description": "Digest of the site's image (sha256:...); takes the place of the tag when set",
+          "type": "string",
+          "default": ""
+        },
+        "pullPolicy": {
+          "description": "Image pull policy",
+          "type": "string",
+          "default": "Always"
+        },
+        "pullSecrets": {
+          "description": "Registry secret names as an array",
+          "type": "array",
+          "default": []
+        }
+      }
+    },
+    "replicaCount": {
+      "description": "Number of replicas; read only while autoscaling.enabled is false",
+      "type": [
+        "integer",
+        "string"
+      ],
+      "default": 1
+    },
+    "containerPort": {
+      "description": "Port the site's image listens on",
+      "type": [
+        "integer",
+        "string"
+      ],
+      "default": 8080
+    },
+    "resourcesPreset": {
+      "description": "Resource preset of the common chart (nano, micro, small, medium, large, xlarge, 2xlarge); wins over resources when set",
+      "type": "string",
+      "enum": [
+        "",
+        "nano",
+        "micro",
+        "small",
+        "medium",
+        "large",
+        "xlarge",
+        "2xlarge"
+      ],
+      "default": ""
+    },
+    "resources": {
+      "description": "Resource requests and limits of the container; read while resourcesPreset is empty",
+      "type": "object",
+      "default": {
+        "requests": {
+          "cpu": "50m",
+          "memory": "64Mi",
+          "ephemeral-storage": "50Mi"
+        },
+        "limits": {
+          "cpu": "250m",
+          "memory": "128Mi",
+          "ephemeral-storage": "256Mi"
+        }
+      }
+    },
+    "probes": {
+      "title": "Probes of the container",
+      "type": "object",
+      "properties": {
+        "readiness": {
+          "title": "Readiness probe; every key besides enabled goes into the probe as it is",
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "description": "Enable the readiness probe",
+              "type": "boolean",
+              "default": true
+            },
+            "tcpSocket": {
+              "title": "TCP handler of the readiness probe",
+              "type": "object",
+              "properties": {
+                "port": {
+                  "description": "Port the readiness probe connects to",
+                  "type": [
+                    "string",
+                    "integer"
+                  ],
+                  "default": "http"
+                }
+              }
+            },
+            "initialDelaySeconds": {
+              "description": "Seconds before the first readiness probe",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "default": 5
+            },
+            "periodSeconds": {
+              "description": "Seconds between two readiness probes",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "default": 2
+            }
+          }
+        },
+        "liveness": {
+          "title": "Liveness probe; every key besides enabled goes into the probe as it is",
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "description": "Enable the liveness probe",
+              "type": "boolean",
+              "default": true
+            },
+            "httpGet": {
+              "title": "HTTP handler of the liveness probe",
+              "type": "object",
+              "properties": {
+                "path": {
+                  "description": "Path the liveness probe requests",
+                  "type": "string",
+                  "default": "/healthz"
+                },
+                "port": {
+                  "description": "Port the liveness probe requests",
+                  "type": [
+                    "string",
+                    "integer"
+                  ],
+                  "default": "http"
+                }
+              }
+            },
+            "initialDelaySeconds": {
+              "description": "Seconds before the first liveness probe",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "default": 5
+            },
+            "periodSeconds": {
+              "description": "Seconds between two liveness probes",
+              "type": [
+                "integer",
+                "string"
+              ],
+              "default": 20
+            }
+          }
+        },
+        "startup": {
+          "title": "Startup probe; every key besides enabled goes into the probe as it is",
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "description": "Enable the startup probe; set its handler and timing next to this key",
+              "type": "boolean",
+              "default": false
+            }
+          }
+        }
+      }
+    },
+    "podSecurityContext": {
+      "description": "Security context of the pod",
+      "type": "object",
+      "default": {}
+    },
+    "containerSecurityContext": {
+      "description": "Security context of the container",
+      "type": "object",
+      "default": {}
+    },
+    "podLabels": {
+      "description": "Extra labels for the pods; they are part of the selector of the Deployment, the Service and the PodDisruptionBudget",
+      "type": "object",
+      "default": {}
+    },
+    "podAnnotations": {
+      "description": "Annotations for the pods",
+      "type": [
+        "object",
+        "string"
+      ],
+      "default": {}
+    },
+    "nodeSelector": {
+      "description": "Node labels for pod assignment",
+      "type": "object",
+      "default": {}
+    },
+    "tolerations": {
+      "description": "Tolerations for pod assignment",
+      "type": "array",
+      "default": []
+    },
+    "affinity": {
+      "description": "Affinity for pod assignment",
+      "type": "object",
+      "default": {}
+    },
+    "autoscaling": {
+      "title": "HorizontalPodAutoscaler",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Deploy a HorizontalPodAutoscaler; replicaCount is then not read",
+          "type": "boolean",
+          "default": true
+        },
+        "minReplicas": {
+          "description": "Minimum number of replicas",
+          "type": [
+            "integer",
+            "string"
+          ],
+          "default": 2
+        },
+        "maxReplicas": {
+          "description": "Maximum number of replicas",
+          "type": [
+            "integer",
+            "string"
+          ],
+          "default": 5
+        },
+        "targetCPUUtilizationPercentage": {
+          "description": "Target CPU utilization in percent of the request; 0 leaves the metric out",
+          "type": [
+            "integer",
+            "string"
+          ],
+          "default": 70
+        },
+        "targetMemoryUtilizationPercentage": {
+          "description": "Target memory utilization in percent of the request; 0 leaves the metric out",
+          "type": [
+            "integer",
+            "string"
+          ],
+          "default": 0
+        },
+        "metrics": {
+          "description": "Extra metrics, appended to spec.metrics as they are",
+          "type": "array",
+          "default": []
+        },
+        "behavior": {
+          "title": "Scaling behavior of the HorizontalPodAutoscaler",
+          "type": "object",
+          "properties": {
+            "scaleUp": {
+              "title": "Scale-up behavior",
+              "type": "object",
+              "properties": {
+                "stabilizationWindowSeconds": {
+                  "description": "Seconds the autoscaler looks back before it scales up",
+                  "type": [
+                    "integer",
+                    "string"
+                  ],
+                  "default": 15
+                },
+                "policies": {
+                  "description": "Policies that limit how fast the autoscaler scales up",
+                  "type": "array",
+                  "default": [
+                    {
+                      "type": "Percent",
+                      "value": 100,
+                      "periodSeconds": 30
+                    }
+                  ]
+                }
+              }
+            },
+            "scaleDown": {
+              "title": "Scale-down behavior",
+              "type": "object",
+              "properties": {
+                "stabilizationWindowSeconds": {
+                  "description": "Seconds the autoscaler looks back before it scales down",
+                  "type": [
+                    "integer",
+                    "string"
+                  ],
+                  "default": 300
+                },
+                "policies": {
+                  "description": "Policies that limit how fast the autoscaler scales down",
+                  "type": "array",
+                  "default": [
+                    {
+                      "type": "Pods",
+                      "value": 1,
+                      "periodSeconds": 60
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "pdb": {
+      "title": "PodDisruptionBudget",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Deploy a PodDisruptionBudget",
+          "type": "boolean",
+          "default": true
+        },
+        "minAvailable": {
+          "description": "Pods that must stay available, as a number or a percentage; empty leaves it out",
+          "type": [
+            "integer",
+            "string"
+          ],
+          "default": 1
+        },
+        "maxUnavailable": {
+          "description": "Pods that may be unavailable, as a number or a percentage; empty leaves it out",
+          "type": [
+            "string",
+            "integer"
+          ],
+          "default": ""
+        }
+      }
+    },
+    "service": {
+      "title": "Service",
+      "type": "object",
+      "properties": {
+        "type": {
+          "description": "Type of the Service",
+          "type": "string",
+          "default": "ClusterIP"
+        },
+        "port": {
+          "description": "Port of the Service",
+          "type": [
+            "integer",
+            "string"
+          ],
+          "default": 80
+        },
+        "annotations": {
+          "description": "Annotations for the Service, added to commonAnnotations",
+          "type": [
+            "object",
+            "string"
+          ],
+          "default": {}
+        }
+      }
+    },
+    "ingress": {
+      "title": "Ingress of the site",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Deploy the Ingress of the site",
+          "type": "boolean",
+          "default": true
+        },
+        "className": {
+          "description": "Ingress class: nginx, nginx-traefik or traefik; required while ingress.enabled or redirect.enabled is true",
+          "type": "string",
+          "enum": [
+            "",
+            "nginx",
+            "nginx-traefik",
+            "traefik"
+          ],
+          "default": ""
+        },
+        "pathType": {
+          "description": "Path type of a path that names none",
+          "type": "string",
+          "default": "ImplementationSpecific"
+        },
+        "commonAnnotations": {
+          "description": "Annotations for the Ingress and for every resource of the redirect",
+          "type": "object",
+          "default": {}
+        },
+        "annotations": {
+          "description": "Annotations for the Ingress of the site only, on top of ingress.commonAnnotations",
+          "type": "object",
+          "default": {}
+        },
+        "hosts": {
+          "description": "Hosts of the site, each with `host` and optional `paths` (`path`, `pathType`); a host without paths serves `/`",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "required": [
+              "host"
+            ],
+            "additionalProperties": false,
+            "properties": {
+              "host": {
+                "description": "Hostname of the site",
+                "type": "string",
+                "minLength": 1
+              },
+              "paths": {
+                "description": "Paths of the host; without any the host serves /",
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "path"
+                  ],
+                  "additionalProperties": false,
+                  "properties": {
+                    "path": {
+                      "description": "Path the Ingress routes to the site",
+                      "type": "string"
+                    },
+                    "pathType": {
+                      "description": "Path type; ingress.pathType when left out",
+                      "type": "string",
+                      "enum": [
+                        "ImplementationSpecific",
+                        "Prefix",
+                        "Exact"
+                      ]
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "default": [
+            {
+              "host": "example.com",
+              "paths": [
+                {
+                  "path": "/",
+                  "pathType": "ImplementationSpecific"
+                }
+              ]
+            }
+          ]
+        },
+        "tls": {
+          "description": "TLS entries of the Ingress, each with `hosts` and `secretName`",
+          "type": [
+            "array",
+            "string"
+          ],
+          "default": []
+        }
+      }
+    },
+    "redirect": {
+      "title": "Redirect of alias hosts",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Deploy the redirect for redirect.hosts",
+          "type": "boolean",
+          "default": false
+        },
+        "targetUrl": {
+          "description": "URL the hosts redirect to, without a trailing slash; required while redirect.enabled is true",
+          "type": "string",
+          "default": ""
+        },
+        "annotations": {
+          "description": "Annotations for the resources of the redirect, on top of ingress.commonAnnotations; cert-manager.io/cluster-issuer makes the Traefik classes render a Certificate",
+          "type": "object",
+          "default": {}
+        },
+        "hosts": {
+          "description": "Hostnames that redirect; required while redirect.enabled is true",
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1
+          },
+          "default": []
+        },
+        "tls": {
+          "description": "TLS entries of the redirect, each with `hosts` and `secretName`; the Traefik classes read the first entry's secretName",
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "hosts": {
+                "description": "Hostnames the certificate covers",
+                "type": "array",
+                "items": {
+                  "type": "string"
+                }
+              },
+              "secretName": {
+                "description": "Secret that holds the certificate",
+                "type": "string"
+              }
+            }
+          },
+          "default": []
+        }
+      }
+    }
+  }
+}

@@ -1,130 +1,71 @@
 # nginx-static
 
-Helm chart for deploying a static, nginx-served website (one Helm release per
-site). Built on top of the [`common`](https://github.com/ioanalytica/common-helm)
-library chart.
+A Helm chart that serves a static website from an NGINX image on Kubernetes. Developed by [IO ANALYTICA](https://ioanalytica.com).
 
-Each release renders:
+Documentation: [nginx-static.ioanalytica.com](https://nginx-static.ioanalytica.com)
 
-- A `Deployment` with configurable image, probes, resources (preset or explicit), and pod-level overrides.
-- A `Service` exposing the container port.
-- An optional `HorizontalPodAutoscaler` (CPU and/or memory based, plus arbitrary extra metrics) with a configurable `behavior` block — this is how scaling is driven from values.
-- An optional `PodDisruptionBudget`.
-- An optional primary `Ingress`.
-- An optional redirect that points any number of alias hosts at one `targetUrl`. Form depends on `ingress.className`:
-  - `nginx`: a single `Ingress` with `nginx.ingress.kubernetes.io/permanent-redirect` (path drops — nginx-ingress limitation).
-  - `traefik`: a `Middleware` (RedirectRegex with capture group, path-preserving) + an `IngressRoute` (Traefik CRDs) + an optional `Certificate` CR when `redirect.annotations` carries a `cert-manager.io/cluster-issuer` (ingress-shim doesn't watch IngressRoute).
+## The chart
 
-## Install
+One release per site: a Deployment of the site's image, a Service, a HorizontalPodAutoscaler, a PodDisruptionBudget, an Ingress for ingress-nginx or Traefik, and a permanent redirect from any number of alias hosts to the site's URL.
+
+```bash
+helm install my-site oci://ghcr.io/ioanalytica/charts/nginx-static \
+  --namespace websites --create-namespace \
+  --set image.registry=registry.example.com \
+  --set image.repository=sites/my-site \
+  --set image.tag=1.0.0 \
+  --set ingress.className=traefik \
+  --set 'ingress.hosts[0].host=www.example.com'
+```
+
+The chart ships no image of its own: the image is the site's, an NGINX that listens on port 8080 as a non-root user and answers `GET /healthz` ([The image](chart/README.md#the-image)). `ingress.className` is required and one of `nginx`, `nginx-traefik` and `traefik` ([Ingress](chart/README.md#ingress)).
+
+To see the chart run before you point it at a cluster of your own, follow [Try it locally](examples/k3d/README.md): a throwaway k3d cluster on one machine, with a redirect through Traefik, in about a minute.
+
+See [chart/README.md](chart/README.md) for the full documentation, and [`examples/sites/`](examples/sites/) for the values of three real sites.
+
+## Verify a release
+
+<!-- #region verify -->
+Releases after 0.2.2 sign the chart with
+[Sigstore](https://www.sigstore.dev/) cosign, keyless: the certificate is
+issued to this repository's `release.yml` running for the release tag, and
+the signature is recorded in the public Rekor log.
+
+A release sets its tag in the registry only once the signature is in place:
+until then the chart is there under its digest alone, so no tag names a chart
+that is not signed yet.
+
+Resolve the tag once and use the digest from then on, so that what you
+install is what you verified. The identity names the release's tag, so the
+check also fails for a tag that was pointed at the chart of another release.
+With [cosign](https://docs.sigstore.dev/cosign/system_config/installation/) 3:
 
 ```sh
-helm install my-site oci://ghcr.io/ioanalytica/charts/nginx-static \
-  -n websites-static --create-namespace \
-  -f my-values.yaml
+version=<version>
+repo=ghcr.io/ioanalytica/charts/nginx-static
+digest=$(helm show chart "oci://$repo" --version "$version" 2>&1 | sed -n 's/^Digest: //p')
+cosign verify "$repo@$digest" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  --certificate-identity "https://github.com/ioanalytica/nginx-static/.github/workflows/release.yml@refs/tags/$version"
 ```
 
-See [`examples/`](./examples) for ready-to-use values for `ioanalytica.com`,
-`juliafranck.de`, and `tiferet`.
+Helm installs by digest as well:
 
-## Scaling
-
-Scaling is driven from values:
-
-```yaml
-autoscaling:
-  enabled: true
-  minReplicas: 2
-  maxReplicas: 5
-  targetCPUUtilizationPercentage: 70
-  behavior:
-    scaleUp:
-      stabilizationWindowSeconds: 15
-      policies:
-        - type: Percent
-          value: 100
-          periodSeconds: 30
-    scaleDown:
-      stabilizationWindowSeconds: 300
-      policies:
-        - type: Pods
-          value: 1
-          periodSeconds: 60
+```sh
+helm install my-site "oci://$repo@$digest" --namespace websites -f my-site.yaml
 ```
 
-When `autoscaling.enabled: false`, the deployment uses `replicaCount` instead.
+The image a release runs is the site's own and not part of this project;
+whether it is signed is up to whoever builds it.
+<!-- #endregion verify -->
 
-## Ingress class
+## Contributing
 
-`ingress.className` is **required** and must be one of:
-
-| Value | Primary provider | Primary kind | Redirect form | Path preserved? |
-|---|---|---|---|---|
-| `nginx`         | rke2-ingress-nginx                                                            | `kind: Ingress` | `kind: Ingress` with `nginx.ingress.kubernetes.io/permanent-redirect` | **No** |
-| `nginx-traefik` | Traefik `kubernetesIngressNGINX` (bridge — translates 85+ nginx annotations) | `kind: Ingress` | `kind: Middleware` (capture group) + `kind: IngressRoute` + optional `kind: Certificate` | **Yes** |
-| `traefik`       | Traefik `kubernetesIngress` (native)                                          | `kind: Ingress` (cert-shim still works) | same as `nginx-traefik`                                                                  | **Yes** |
-
-Both `nginx-traefik` and `traefik` presume Traefik is present in the
-cluster, so the chart emits the path-preserving redirect form in both
-cases (the IngressRoute itself declares `ingressClassName: traefik`,
-independent of the primary's class). Pick `nginx-traefik` over `traefik`
-when the PRIMARY needs the bridge provider to translate nginx-style
-annotations in `commonAnnotations` / `ingress.annotations` during
-migration; the redirect output is identical.
-
-The chart fails with a clear error if `ingress.className` is empty or
-unknown — defaulting is unsafe in mixed-controller clusters.
-
-## Redirect ingress
-
-A release optionally renders a redirect covering every alias host. All
-hosts share the same `targetUrl` and the same TLS secret. On
-`className: nginx` the chart's `ingress.commonAnnotations` (default:
-WAF-style snippet blocking dotfiles, PHP, and common WordPress scan paths)
-are merged into the redirect Ingress; on `className: traefik` the
-RedirectRegex middleware terminates the request with HTTP 308 before any
-backend lookup, so the snippet would have nothing to apply to.
-
-```yaml
-ingress:
-  className: traefik   # or nginx
-redirect:
-  enabled: true
-  targetUrl: https://example.com
-  annotations:
-    cert-manager.io/cluster-issuer: letsencrypt-prod   # triggers Certificate CR on traefik
-  hosts:
-    - www.example.com
-    - example.net
-  tls:
-    - hosts: [www.example.com, example.net]
-      secretName: example-aliases-tls
-```
-
-If `redirect.tls[0].secretName` already exists in the namespace (e.g.,
-reflected from cert-manager), omit the `cert-manager.io/cluster-issuer`
-annotation and the chart will not emit a Certificate CR.
-
-Set `redirect.enabled: false` (the default) to skip the redirect entirely.
-
-## Values reference
-
-See [`values.yaml`](./values.yaml) for the full schema and defaults.
-
-| Key | Default | Description |
-|---|---|---|
-| `image.registry` / `repository` / `tag` | harbor.ioanalytica.com / `io/websites/example` / `""` | Tag falls back to `Chart.AppVersion`. |
-| `containerPort` | `8080` | Pod port; service `targetPort` is named `http`. |
-| `resourcesPreset` | `""` | One of `nano`, `micro`, `small`, `medium`, `large`, `xlarge`, `2xlarge` (from common). Wins over `resources` when set. |
-| `resources` | small request/limit pair | Used when `resourcesPreset` is empty. |
-| `probes.readiness` / `liveness` / `startup` | TCP `/healthz` defaults | Each gated by `enabled`; remaining keys are passed verbatim. |
-| `autoscaling.enabled` | `true` | When false, `replicaCount` is used. |
-| `pdb.enabled` | `true` | Disables the PodDisruptionBudget when false. |
-| `ingress.className` | `""` (REQUIRED) | One of `nginx`, `traefik`. Empty/other → render fails. |
-| `ingress.commonAnnotations` | dotfile/PHP/WP server-snippet | Merged into primary + (on `className: nginx`) the redirect ingress. |
-| `ingress.hosts` | `[example.com]` | Hosts and paths for the primary ingress. |
-| `redirect.enabled` | `false` | Render a redirect for `redirect.hosts` (form depends on `ingress.className`). |
-| `redirect.targetUrl` | `""` | Required when `redirect.enabled` is true. |
+Issues and pull requests are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md). Report security issues privately, as [SECURITY.md](SECURITY.md) describes.
 
 ## License
 
-Apache-2.0
+Copyright &copy; 2024-2026 [IO ANALYTICA](https://ioanalytica.com).
+
+Licensed under the Apache License, Version 2.0: see [LICENSE](LICENSE).
