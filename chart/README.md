@@ -136,7 +136,7 @@ The base image's one server block listens on port 8080 and includes every file i
 
 A file of the site with one of these names replaces it. A site that replaces `01-common.conf` defines `/healthz` itself.
 
-The document root is empty in the base image. While the site has no start page (`index.html`, or what the site's own `index` directive names), `/` answers with the base image's placeholder page, which is kept outside the document root and has no address of its own. `01-common.conf` does this in a `location = /`: a site that needs its own `location = /`, such as a redirect to a language's start page, replaces `01-common.conf`.
+The document root is empty in the base image. While the site has no start page (`index.html`, or what the site's own `index` directive names), `/` answers with the base image's placeholder page, which is kept outside the document root and has no address of its own. `01-common.conf` does this in a `location = /`, which NGINX prefers to a `location /` for the path `/` itself. A site that routes `/` in its own configuration replaces `01-common.conf`: a `location = /` of its own, such as a redirect to a language's start page, fails the configuration check as a duplicate, and a `location /` is not asked for `/`, only for every other path.
 
 A site's own rules go into a file such as `02-site.conf`:
 

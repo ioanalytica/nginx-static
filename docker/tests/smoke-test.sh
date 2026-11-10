@@ -162,6 +162,8 @@ assert "the placeholder, while there is no site" 200 /            "nginx-static 
 assert "the placeholder is no file of the site" 404 /index.html
 assert "and its location is internal"          404 /nginx-static-placeholder
 assert "the placeholder answers GET and HEAD only" 405 / "" -X POST
+header "the 405 names the methods there are"   present '^Allow: GET, HEAD$'                / -X POST
+header "and keeps the security headers"        present '^X-Content-Type-Options: nosniff$' / -X POST
 assert "the liveness probe's path"             200 /healthz     "OK"
 assert "a file that is not there"              404 /nope
 assert "a hidden file"                         403 /.env
