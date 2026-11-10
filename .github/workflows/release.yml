@@ -1,11 +1,11 @@
 name: Release
 
-# A tag push is a release: the chart is packaged, pushed to GHCR under its
-# digest, signed, and only then tagged. Nothing here runs for a branch push
-# or a pull request; those are test.yml's business.
+# A tag push is a release: the base image and the chart are built, pushed to
+# GHCR under their digests, signed, and only then tagged. Nothing here runs
+# for a branch push or a pull request; those are test.yml's business.
 #
-#   gate ─ prep ─ chart ─ sign ─ tag ─┬─ release
-#                                     └─ try-locally
+#   gate ─ prep ─ image ─ smoke ─ chart ─ sign ─ tag ─┬─ release
+#                                                     └─ try-locally
 #
 # The tag is the chart version in chart/Chart.yaml, or a release candidate of
 # it: X.Y.Z-rc.N goes on the commit whose chart/Chart.yaml says X.Y.Z, the
@@ -20,7 +20,7 @@ permissions: {}
 env:
   REGISTRY: ghcr.io
   OWNER: ioanalytica
-  # Whom a release's signature names (the sign job): this workflow, run for
+  # Whom a release's signatures name (the sign job): this workflow, run for
   # the release's tag, which follows this prefix. The README ("Verify a
   # release") gives users the same identity.
   SIGNER: 'https://github.com/ioanalytica/nginx-static/.github/workflows/release.yml@refs/tags/'
@@ -58,12 +58,69 @@ jobs:
           password: ${{ secrets.GITHUB_TOKEN }}
       # A tag pushed a second time stops here, before anything is built.
       - name: The version must not be published yet
-        run: scripts/release-unpublished.sh "$GITHUB_REF_NAME" "$REGISTRY/$OWNER/charts/nginx-static"
+        run: |
+          scripts/release-unpublished.sh "$GITHUB_REF_NAME" \
+            "$REGISTRY/$OWNER/nginx-static" "$REGISTRY/$OWNER/charts/nginx-static"
+
+  image:
+    needs: prep
+    if: startsWith(github.ref, 'refs/tags/')
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/build-image.yml
+    with:
+      image: nginx-static
+      context: ./docker
+      file: ./docker/Dockerfile
+      # Busts the cached package layer once per release (see Dockerfile).
+      build-args: APK_REFRESH=${{ github.ref_name }}
+      # `latest` moves with releases only: a version with a -suffix is a
+      # release candidate.
+      tags: |
+        type=raw,value=${{ github.ref_name }}
+        type=raw,value=latest,enable=${{ !contains(github.ref_name, '-') }}
+
+  # The smoke test against the image this run built, on both platforms,
+  # before anything names it: the pull request's test ran on a build of the
+  # same source, but a release build installs the Alpine packages afresh.
+  smoke:
+    needs: image
+    if: startsWith(github.ref, 'refs/tags/')
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - platform: linux/amd64
+            runner: ubuntu-26.04
+          - platform: linux/arm64
+            runner: ubuntu-26.04-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Run the smoke test on the built image
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.OWNER }}/nginx-static@${{ needs.image.outputs.digest }}
+        run: |
+          docker pull "$IMAGE"
+          ./docker/tests/smoke-test.sh "$IMAGE"
 
   chart:
-    # The chart goes into its repository under its digest alone; the tag job
-    # gives it its version once it is signed.
-    needs: prep
+    # Waits for the image and its smoke test, so a failed image leaves no
+    # chart behind. The chart goes into its repository under its digest
+    # alone; the tag job gives it its version once it is signed.
+    needs: [prep, image, smoke]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-26.04
     timeout-minutes: 10
@@ -98,7 +155,7 @@ jobs:
         run: scripts/check-release-tag.sh "$GITHUB_REF_NAME"
       # A release candidate is tagged on the commit its release will be
       # tagged on, whose Chart.yaml says X.Y.Z: its chart gets the tag's
-      # version.
+      # version, and with it the image this run built.
       - name: Chart version from the tag
         run: scripts/chart-release-version.sh "$GITHUB_REF_NAME"
       # What Artifact Hub shows for this version: its changes, from the
@@ -149,21 +206,24 @@ jobs:
           oras cp --from-plain-http "localhost:5000/charts/nginx-static@$digest" "$REGISTRY/$OWNER/charts/nginx-static"
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
-  # A keyless Sigstore signature for the chart, by its digest: a tag can be
-  # moved to another manifest, the digest is what was built, and until the
-  # tag job the chart has no tag. Fulcio certifies this job's GitHub OIDC
-  # token, the certificate names this workflow at the release tag, and the
-  # signature is logged in the public Rekor instance. The one job with an
-  # OIDC token.
+  # Keyless Sigstore signatures for what the release pushed to GHCR, each by
+  # its digest: a tag can be moved to another manifest, the digest is what
+  # was built, and until the tag job nothing of the release has a tag. The
+  # image index lists the attestation manifests (SBOM and provenance) of its
+  # platforms, so its signature covers those as well. Fulcio certifies this
+  # job's GitHub OIDC token, the certificate names this workflow at the
+  # release tag, and the signature is logged in the public Rekor instance.
+  # The one job with an OIDC token: signing in build-image.yml would name
+  # that workflow instead, and users would need a second identity.
   sign:
-    needs: chart
+    needs: [image, chart]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-26.04
     # Signing and verifying take seconds; an unreachable Sigstore service
     # must not hold the release run for hours.
     timeout-minutes: 10
     permissions:
-      packages: write        # cosign stores the signature next to the chart
+      packages: write        # cosign stores each signature next to its artifact
       id-token: write        # the token Fulcio issues the signing certificate for
     steps:
       - uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
@@ -175,25 +235,29 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
       # Verified right away with the command the README gives users, so a
-      # release cannot publish a signature that check fails on.
+      # release cannot publish signatures that check fails on.
       - name: Sign by digest
         env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.OWNER }}/nginx-static@${{ needs.image.outputs.digest }}
           CHART: ${{ env.REGISTRY }}/${{ env.OWNER }}/charts/nginx-static@${{ needs.chart.outputs.digest }}
         run: |
-          cosign sign --yes "$CHART"
-          cosign verify "$CHART" \
+          cosign sign --yes "$IMAGE" "$CHART"
+          cosign verify "$IMAGE" "$CHART" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             --certificate-identity "$SIGNER$GITHUB_REF_NAME" >/dev/null
 
-  # The tags of the release, set once the chart is signed: Artifact Hub's
-  # repository metadata, and the chart's version last. Until here the chart
-  # sits in GHCR under its digest alone, so no tag names an unsigned one:
-  # Artifact Hub indexes a chart version when its tag appears, and does not
-  # check it again while its digest stays the same. A failed sign job leaves
-  # no tag behind; a re-run of this job sets the same tag on the same digest
-  # again.
+  # The tags of the release, set once its digests are signed: the image's
+  # tags from build-image.yml (the version, and `latest` for a release),
+  # Artifact Hub's repository metadata, and the chart's version last. Until
+  # here both artifacts sit in GHCR under their digests alone, so no tag
+  # names an unsigned one: Artifact Hub indexes a chart version when its tag
+  # appears, and does not check it again while its digest stays the same. A
+  # failed sign job leaves no tag behind; a re-run of this job sets the same
+  # tags on the same digests again. A tag moves only to the image of a later
+  # run: a late re-run of an older release's failed jobs leaves `latest` on
+  # the newer release's image.
   tag:
-    needs: [chart, sign]
+    needs: [image, chart, sign]
     if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-26.04
     timeout-minutes: 10
@@ -205,7 +269,7 @@ jobs:
       queue: max
     permissions:
       contents: read         # artifacthub-repo.yml and the oras action
-      packages: write        # tag the chart
+      packages: write        # tag the release's artifacts
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -216,6 +280,14 @@ jobs:
           registry: ${{ env.REGISTRY }}
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # The image first: the chart, tagged last, names it by its tag. The
+      # list and the run number of the index are checked before the first
+      # tag is set.
+      - name: Tag the image
+        env:
+          IMAGE: ${{ env.REGISTRY }}/${{ env.OWNER }}/nginx-static@${{ needs.image.outputs.digest }}
+          IMAGE_TAGS: ${{ needs.image.outputs.tags }}
+        run: scripts/release-tag-images.sh "$GITHUB_REF_NAME" "$IMAGE" "$IMAGE_TAGS"
       # Artifact Hub reads artifacthub-repo.yml from the tag `artifacthub.io`
       # of the chart's repository, as the layer of an ORAS artifact. It reads
       # it when a new version appears, so it goes up before the chart's
@@ -232,9 +304,9 @@ jobs:
           CHART: ${{ env.REGISTRY }}/${{ env.OWNER }}/charts/nginx-static@${{ needs.chart.outputs.digest }}
         run: scripts/release-tag-once.sh "$CHART" "$GITHUB_REF_NAME"
 
-  # The GitHub Release comes last, once the signature verified and the tag is
-  # set: a release page must not announce a chart that fails the check the
-  # README gives users, or that cannot be pulled by its version yet. A failed
+  # The GitHub Release comes last, once the signatures verified and the tags
+  # are set: a release page must not announce artifacts that fail the check
+  # the README gives users, or that cannot be pulled by their version yet. A failed
   # sign or tag job leaves no release behind; re-running it publishes one.
   release:
     needs: [chart, sign, tag]
@@ -285,9 +357,10 @@ jobs:
           make_latest: ${{ steps.newest.outputs.latest }}
 
   # The page "Try it locally" against what this tag published: the chart at
-  # the tag's version, pulled from the registry, with the page and
-  # examples/k3d/ of the tag's commit. After the tagging, so the page meets
-  # the chart as users get it, signed and tagged; beside the release, and
+  # the tag's version, pulled from the registry and installed with the image
+  # it names, with the page and examples/k3d/ of the tag's commit. After the
+  # tagging, so the page meets the artifacts as users get them, signed and
+  # tagged; beside the release, and
   # nothing may `needs:` it: a flaky k3d run must not hold up a release.
   try-locally:
     needs: tag

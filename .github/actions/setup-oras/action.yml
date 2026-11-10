@@ -2,7 +2,7 @@ name: Set up oras
 description: >-
   Installs the oras CLI at the version below, checked against the SHA-256 sum
   pinned with it, and puts it on the PATH. A release pushes, copies and tags
-  the chart with it (release.yml).
+  its artifacts with it (release.yml, build-image.yml).
 
 runs:
   using: composite

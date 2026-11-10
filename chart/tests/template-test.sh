@@ -100,13 +100,36 @@ BASE="Deployment=1 HorizontalPodAutoscaler=1"
 echo "=== Chart metadata"
 chart_version=$(sed -n 's/^version: *//p' "$CHART/Chart.yaml" | tr -d '"')
 app_version=$(sed -n 's/^appVersion: *//p' "$CHART/Chart.yaml" | tr -d '"')
-# The chart ships no image, so appVersion has nothing of its own to name and
-# follows the chart version; scripts/chart-release-version.sh sets both for a
-# release candidate.
-if [ -n "$chart_version" ] && [ "$chart_version" = "$app_version" ]; then
-    ok "appVersion is the chart version, $chart_version"
+# appVersion is the NGINX in the base image. Renovate raises both together;
+# a bump by hand that forgets one would ship a chart that names another
+# NGINX than its image holds.
+nginx_version=$(sed -n 's/^ARG NGINX_VERSION=//p' "$REPO/docker/Dockerfile")
+if [ -n "$nginx_version" ] && [ "$nginx_version" = "$app_version" ]; then
+    ok "appVersion is the NGINX version of the image, $nginx_version"
 else
-    fail "appVersion is '$app_version', the chart version is '$chart_version'"
+    fail "appVersion is '$app_version', the Dockerfile's NGINX_VERSION is '$nginx_version'"
+fi
+# The chart version is the tag of the base image: the templates take it from
+# .Chart.Version, and a release builds, signs and tags the image and the
+# chart together. A chart that named another tag would run an image its
+# release did not build.
+rendered_image=$(render --set ingress.className=nginx | sed -n 's/^ *image: *//p' | tr -d '"')
+if [ "$rendered_image" = "ghcr.io/ioanalytica/nginx-static:$chart_version" ]; then
+    ok "the default image is the base image at the chart version"
+else
+    fail "the default image is '$rendered_image', expected ghcr.io/ioanalytica/nginx-static:$chart_version"
+fi
+# The list Artifact Hub reads and scans names the same image.
+listed=$(sed -n 's/^      image: *//p' "$CHART/Chart.yaml")
+if [ "$listed" = "ghcr.io/ioanalytica/nginx-static:$chart_version" ]; then
+    ok "artifacthub.io/images names the base image at the chart version"
+else
+    fail "artifacthub.io/images names '$listed'"
+fi
+if grep -qE '^appVersion: "[0-9]+\.[0-9]*[02468]\.[0-9]+"$' "$CHART/Chart.yaml"; then
+    ok "appVersion is quoted, and a stable NGINX release"
+else
+    fail "appVersion is not a quoted version of an NGINX stable branch (an even minor)"
 fi
 if [[ "$chart_version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
     ok "the chart version is a plain SemVer version"
@@ -228,7 +251,9 @@ expect "the image is registry, repository and tag"   present 'image: "registry.e
     --set image.registry=registry.example --set image.repository=sites/blog --set image.tag=1.2.3
 expect "a digest takes the place of the tag"         present 'image: "registry.example/sites/blog@sha256:0123"' --set ingress.className=nginx \
     --set image.registry=registry.example --set image.repository=sites/blog --set image.tag=1.2.3 --set image.digest=sha256:0123
-expect "global.imageRegistry replaces the registry"  present 'image: "mirror.example/io/websites/example:' --set ingress.className=nginx --set global.imageRegistry=mirror.example
+expect "global.imageRegistry replaces the registry"  present 'image: "mirror.example/ioanalytica/nginx-static:' --set ingress.className=nginx --set global.imageRegistry=mirror.example
+expect "an image without a tag takes the chart version" present "image: \"registry.example/sites/blog:$chart_version\"" --set ingress.className=nginx \
+    --set image.registry=registry.example --set image.repository=sites/blog
 expect "pull secrets reach the pod"                  present '- name: regcred'             --set ingress.className=nginx --set 'image.pullSecrets={regcred}'
 expect "global pull secrets reach the pod"           present '- name: regcred'             --set ingress.className=nginx --set 'global.imagePullSecrets={regcred}'
 expect "the container is named after the release"    present '- name: tst-nginx-static'    --set ingress.className=nginx
@@ -252,6 +277,12 @@ check  "a null handler beside a valid one"           --set ingress.className=ngi
     --set probes.startup.httpGet.path=/healthz --set probes.startup.httpGet.port=http
 expect "extra probe keys pass through"               present 'failureThreshold: 7'         --set ingress.className=nginx --set probes.readiness.failureThreshold=7
 expect "a security context reaches the container"    present 'allowPrivilegeEscalation: false' --set ingress.className=nginx --set containerSecurityContext.allowPrivilegeEscalation=false
+TMP_VOLUME=(--set-json 'extraVolumes=[{"name":"tmp","emptyDir":{}}]' --set-json 'extraVolumeMounts=[{"name":"tmp","mountPath":"/tmp"}]')
+check  "a volume for /tmp"                           --set ingress.className=nginx "${TMP_VOLUME[@]}" --set containerSecurityContext.readOnlyRootFilesystem=true
+expect "an extra volume reaches the pod"             present 'emptyDir: {}'                --set ingress.className=nginx "${TMP_VOLUME[@]}"
+expect "an extra mount reaches the container"        present 'mountPath: /tmp'             --set ingress.className=nginx "${TMP_VOLUME[@]}"
+expect "no volumes by default"                       absent  'volumes:'                    --set ingress.className=nginx
+expect "no mounts by default"                        absent  'volumeMounts:'               --set ingress.className=nginx
 expect "a security context reaches the pod"          present 'runAsNonRoot: true'          --set ingress.className=nginx --set podSecurityContext.runAsNonRoot=true
 expect "pod annotations are rendered as templates"   present "release: 'tst'"               --set ingress.className=nginx --set-json 'podAnnotations={"release":"{{ .Release.Name }}"}'
 expect "a node selector reaches the pod"             present 'disktype: ssd'               --set ingress.className=nginx --set nodeSelector.disktype=ssd

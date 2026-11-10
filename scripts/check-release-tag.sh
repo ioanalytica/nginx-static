@@ -2,11 +2,10 @@
 #
 # Fail a release build whose git tag is not the version in chart/Chart.yaml.
 #
-# The two reach the published chart by different routes: the release's page,
-# its notes and the signature's identity name the git tag, the chart is
-# packaged at the version in chart/Chart.yaml. A tag that differs would
-# announce a version nobody can pull, and package the chart at the version in
-# the file once more. The tag is the version as it is, without a "v": the
+# The two reach the published artifacts by different routes: the image is
+# tagged with the git tag, the chart is packaged at the version in
+# chart/Chart.yaml. A tag that differs would publish an image no chart names,
+# and package the chart at the version in the file once more. The tag is the version as it is, without a "v": the
 # tags up to v0.2.2 had one, the releases built by this workflow have none.
 #
 # A release candidate of the chart's version passes too: X.Y.P-rc.N goes on

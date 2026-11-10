@@ -10,6 +10,7 @@ Verifies that the resources of one render refer to each other correctly:
     Deployment with an autoscaler sets no replicas
   * every Ingress backend names the Service of the render and one of its
     ports, and the Service's targetPort is a port of the container
+  * every volume mount of the container refers to a volume of the pod
   * a probe has exactly one handler, and one that names a port names one
     the container has
   * an IngressRoute refers to a Middleware of the render, and a Certificate
@@ -85,7 +86,11 @@ def main():
             problems.append(f"Deployment {name}: the selector does not match the pod labels")
 
         ports = set()
+        volumes = {volume["name"] for volume in pod["spec"].get("volumes") or []}
         for container in pod["spec"]["containers"]:
+            for mount in container.get("volumeMounts") or []:
+                if mount["name"] not in volumes:
+                    problems.append(f"Deployment {name}: the mount {mount['mountPath']} names volume {mount['name']!r}, which the pod lacks")
             for port in container.get("ports") or []:
                 ports.update({port.get("name"), port.get("containerPort")})
             for probe in ("readinessProbe", "livenessProbe", "startupProbe"):

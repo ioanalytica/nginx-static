@@ -7,13 +7,16 @@ name: Try it locally
 # controller: the redirect is made of Traefik's own resource kinds, which a
 # render cannot check against the Traefik a cluster runs.
 #
-# A pull request runs it with the chart of its checkout.
+# A pull request runs it with the chart of its checkout, and with the base
+# image built from the checkout and loaded into the cluster: the chart names
+# the image of its own version, which the registry has only once that
+# version is released.
 #
 # The release workflow calls it with the version it has just published: the
-# chart is then pulled from the registry. A run by hand takes a version too.
-# The weekly run, and a run by hand without a version, install the latest
-# release, as the page does, and catch what moves under it: the runner, k3s's
-# Traefik, the NGINX image.
+# chart is then pulled from the registry and installed with the image it
+# names. A run by hand takes a version too. The weekly run, and a run by hand
+# without a version, install the latest release, as the page does, and catch
+# what moves under it: the runner and k3s's Traefik.
 #
 # The cluster runs the k3s image the page's step 1 names, with the k3d
 # installed below; tests/ci/test.sh keeps both in step with the page's
@@ -22,6 +25,7 @@ on:
   pull_request:
     paths:
       - 'chart/**'
+      - 'docker/**'
       - 'examples/k3d/**'
       - 'tests/try-locally/**'
       - '.github/workflows/try-locally.yml'
@@ -45,7 +49,8 @@ on:
         type: string
         required: true
 
-# The chart and the image are pulled without a token: both are public.
+# The chart and the image are pulled without a token: both are public. The
+# build cache is read with the runner's own cache token.
 permissions:
   contents: read
 
@@ -90,19 +95,52 @@ jobs:
           k3d version
           kubectl version --client
 
-      # The chart of the checkout for a pull request and for a run by hand
-      # that asks for it; a published version where one is given; otherwise
-      # the page as written, with the latest release.
-      - name: The page, end to end
+      # Which chart the page installs: the checkout's for a pull request and
+      # for a run by hand that asks for it. The image is then the checkout's
+      # too, under the name the chart gives it.
+      - name: The chart
+        id: chart
         env:
           VERSION: ${{ inputs.chart-version }}
           CHOICE: ${{ github.event_name == 'pull_request' && 'checkout' || inputs.chart }}
         run: |
+          if [ -z "$VERSION" ] && [ "$CHOICE" = checkout ]; then
+            helm dependency update chart/
+            image="$(helm template demo chart/ -f examples/k3d/values.yaml | sed -n 's/^ *image: *"\(.*\)"$/\1/p')"
+            [ -n "$image" ] || { echo "the chart renders no image" >&2; exit 1; }
+            echo "image=$image" | tee -a "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Docker Buildx
+        if: steps.chart.outputs.image != ''
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Into the runner's Docker daemon; run.sh loads it into the cluster
+      # from there. A plain image, without a provenance attestation beside
+      # it: the node imports a single manifest. The cache is the one
+      # test.yml writes; this job only reads it.
+      - name: Build the image from the checkout
+        if: steps.chart.outputs.image != ''
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ./docker
+          platforms: linux/amd64
+          load: true
+          provenance: false
+          tags: ${{ steps.chart.outputs.image }}
+          cache-from: type=gha
+
+      # A published version where one is given; the checkout's chart and
+      # image; otherwise the page as written, with the latest release.
+      - name: The page, end to end
+        env:
+          VERSION: ${{ inputs.chart-version }}
+          IMAGE: ${{ steps.chart.outputs.image }}
+        run: |
           if [ -n "$VERSION" ]; then
             tests/try-locally/run.sh oci://ghcr.io/ioanalytica/charts/nginx-static --version "$VERSION"
-          elif [ "$CHOICE" = checkout ]; then
-            helm dependency update chart/
-            tests/try-locally/run.sh ./chart
+          elif [ -n "$IMAGE" ]; then
+            tests/try-locally/run.sh --import "$IMAGE" ./chart
           else
             tests/try-locally/run.sh
           fi

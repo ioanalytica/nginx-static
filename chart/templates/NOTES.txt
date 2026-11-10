@@ -1,6 +1,6 @@
 {{ include "common.names.fullname" . }} has been deployed.
 
-Image:        {{ include "common.images.image" (dict "imageRoot" .Values.image "global" .Values.global "chart" .Chart) }}
+Image:        {{ include "nginx-static.image" . }}
 Namespace:    {{ include "common.names.namespace" . }}
 Service:      {{ include "common.names.fullname" . }} ({{ .Values.service.type }} on port {{ .Values.service.port }})
 {{- if .Values.autoscaling.enabled }}

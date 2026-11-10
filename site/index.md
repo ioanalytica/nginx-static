@@ -7,7 +7,7 @@ editPage: true
 hero:
   name: nginx-static
   text: Static websites on NGINX for Kubernetes
-  tagline: A Helm chart that serves a static website from the site's own NGINX image, with autoscaling, an Ingress for ingress-nginx or Traefik, and a redirect from alias hosts.
+  tagline: A Helm chart that serves a static website from the site's own NGINX image, with autoscaling, an Ingress for ingress-nginx or Traefik, and a redirect from alias hosts. And a 2 MB NGINX base image, built from source without TLS, to build the site's image on.
   actions:
     - theme: brand
       text: Install
@@ -23,8 +23,8 @@ hero:
       link: https://github.com/ioanalytica/nginx-static
 features:
   - icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 3 7.5l9 4.5 9-4.5z"/><path d="m3 12 9 4.5 9-4.5"/><path d="m3 16.5 9 4.5 9-4.5"/></svg>'
-    title: One release per site
-    details: The chart ships no image. A release names the image of the site it serves, an NGINX that listens on port 8080 as a non-root user.
+    title: A base image made for the job
+    details: NGINX built from source without TLS and without anything that proxies. One static binary, no shell, no OpenSSL, 2 MB. A site's image copies its files in.
     link: /reference/image
   - icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="12" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="19" cy="12" r="2"/><circle cx="19" cy="19" r="2"/><path d="M7 12h10"/><path d="M7 11.2 17 6"/><path d="M7 12.8 17 18"/></svg>'
     title: Three ingress classes
@@ -44,15 +44,17 @@ features:
     link: /reference/parameters
   - icon: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3 5 6v5c0 4.5 2.9 8.4 7 10 4.1-1.6 7-5.5 7-10V6z"/><path d="m9 12 2 2 4-4"/></svg>'
     title: Signed releases
-    details: A release signs the chart with Sigstore cosign, keyless. The page has the command that verifies a chart and installs it by its digest.
+    details: A release signs the base image and the chart with Sigstore cosign, keyless. The page has the commands that verify them by their digests.
     link: /security/verify
 ---
 
 ## How it fits together
 
 A release is one site. Its Deployment runs the image the release names: an
-NGINX with the site's files, which the chart does not build or ship.
-[The image](/reference/image) says what the chart expects of it.
+NGINX with the site's files. The project's base image is what such an image
+is built on, with a `COPY` of the files and nothing else;
+[The image](/reference/image) says how, and what the chart expects of an
+image that is built on something else.
 
 Around it the chart renders a Service, a HorizontalPodAutoscaler, a
 PodDisruptionBudget and an Ingress for one of three ingress classes, and on

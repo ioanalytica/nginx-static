@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+* **A base image.** The project builds its own NGINX image,
+  `ghcr.io/ioanalytica/nginx-static`, for a site's image to build on: NGINX's
+  stable release (1.30.6) from source, without TLS, HTTP/2 and the modules
+  that proxy, as one static binary in an image with no shell and no OpenSSL.
+  About 2 MB, for `linux/amd64` and `linux/arm64`; it runs as a non-root user
+  on a read-only root filesystem. "The image" in the chart's README says how
+  a site's image is built on it.
+
+* **The default image is the base image**, at the chart's version, where it
+  was a placeholder. An empty `image.tag` means the chart's version;
+  `appVersion` names the NGINX of the base image. A release that names its
+  image and tag is not affected.
+
+* **`extraVolumes` and `extraVolumeMounts`**, for a volume at `/tmp` under a
+  read-only root filesystem, or any other.
+
 * **Values schema.** The chart has a `values.schema.json`: Helm checks the
   values of every install, upgrade, template and lint against it, and
   Artifact Hub shows it as the values reference. It refuses a switch
@@ -9,9 +25,10 @@
   `ingress.className` or `resourcesPreset` outside the listed ones; keys it
   does not list are left to the chart. See "Upgrading" in the chart's README.
 
-* **Signed releases.** A release signs the chart with Sigstore cosign,
-  keyless, and sets its tag in the registry only once the signature is in
-  place. "Verify a release" in the README has the command.
+* **Signed releases.** A release signs the base image and the chart with
+  Sigstore cosign, keyless, and sets their tags in the registry only once the
+  signatures are in place. The image carries an SBOM and provenance. "Verify
+  a release" in the README has the commands.
 
 * **The Ingress names the Service's port by its name.** A `service.port`
   given with `--set` rendered an Ingress backend without a port, which the
@@ -39,8 +56,9 @@
 * The repository has one branch, `main`; the chart lives in `chart/`, the
   example values in `examples/sites/`.
 * Release tags carry no `v` any more: the tag is the chart version.
-* Tests for the templates, the schema, the workflows and the release
-  scripts, and the page "Try it locally" end to end in k3d.
+* Tests for the templates, the schema, the image, the workflows and the
+  release scripts, and the page "Try it locally" end to end in k3d.
+* A daily scan of the base image for known vulnerabilities.
 * A documentation site, built from the READMEs.
 
 ## 0.2.2

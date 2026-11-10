@@ -2,18 +2,17 @@
 
 The chart in a throwaway [k3d](https://k3d.io) cluster on one machine: a
 site behind Traefik, and an alias host that redirects to it. It takes about
-a minute, most of it for pulling the images. Tested with k3d 5.9 and
+a minute, most of it for starting the cluster. Tested with k3d 5.9 and
 k3s 1.37.
 
-> **A cluster to try the chart in.** The chart ships no image: a release
-> names the image of the site it serves. Here the stock
-> [unprivileged NGINX image](https://hub.docker.com/r/nginxinc/nginx-unprivileged)
-> stands in for one, and its welcome page for the site. Nothing here is a
-> setup to keep.
+> **A cluster to try the chart in.** A release names the image of the site
+> it serves. Here the project's base image, which the chart runs by default,
+> stands in for one, and its placeholder page for the site. Nothing here is
+> a setup to keep.
 
 | Part | What it does here |
 | --- | --- |
-| The site | one pod of `nginxinc/nginx-unprivileged`, listening on port 8080 as a non-root user |
+| The site | one pod of the base image, `ghcr.io/ioanalytica/nginx-static`: NGINX on port 8080 as a non-root user, on a read-only root filesystem |
 | Ingress | class `traefik`, host `site.localhost` |
 | Redirect | a Traefik Middleware and IngressRoute that send `www.site.localhost` to the site, with the request path |
 | Traefik | ships with k3s; listens on the ports 8080 (HTTP) and 8443 (HTTPS) of this machine |
@@ -61,16 +60,16 @@ helm install demo oci://ghcr.io/ioanalytica/charts/nginx-static \
 
 The label has Kubernetes refuse any pod in the namespace that does not meet
 the `restricted` Pod Security Standard: no root user, no privilege
-escalation, no capabilities.
+escalation, no capabilities. The image is not named: the chart runs the
+base image of its own version.
 
 Without `--version`, Helm installs the latest release. The values file holds
-what stands in for a site and what k3d needs:
+what k3d needs and the settings the base image is made for:
 
 | Value | Why |
 | --- | --- |
-| `image.*` | the stock unprivileged NGINX image in place of a site's image |
-| `probes.liveness.httpGet.path: /` | the chart asks a site's image for `/healthz`, which the stock image does not have; its welcome page answers instead |
-| `podSecurityContext`, `containerSecurityContext` | the settings of the `restricted` Pod Security Standard, which the namespace created below enforces |
+| `podSecurityContext`, `containerSecurityContext` | the settings of the `restricted` Pod Security Standard, which the namespace created above enforces, and a read-only root filesystem |
+| `extraVolumes`, `extraVolumeMounts` | an `emptyDir` at `/tmp`, the one place NGINX writes to |
 | `autoscaling.enabled`, `pdb.enabled` | off: one pod on one node |
 | `ingress.className: traefik` | the controller k3s ships |
 | `ingress.hosts` | the site's host, `site.localhost` |
@@ -89,7 +88,7 @@ curl -s http://site.localhost:8080/ | grep '<title>'
 ```
 
 ```
-<title>Welcome to nginx!</title>
+<head><meta charset="utf-8"><title>nginx-static</title></head>
 ```
 
 Traefik picks a new Ingress up within a second or two; a `404` right after

@@ -4,15 +4,16 @@
 apiVersion: v2
 name: nginx-static
 version: 0.2.2
-# The chart ships no image of its own, so there is no application version to
-# name: appVersion follows the chart version (chart/tests/template-test.sh).
-appVersion: "0.2.2"
+# The NGINX in the project's base image, NGINX_VERSION of docker/Dockerfile
+# (chart/tests/template-test.sh). The image's tag is the chart version.
+appVersion: "1.30.6"
 type: application
 
 description: >-
   Serves a static website from an NGINX image on Kubernetes: Deployment,
   autoscaling, PodDisruptionBudget, an Ingress for ingress-nginx or Traefik,
-  and a permanent redirect from any number of alias hosts.
+  and a permanent redirect from any number of alias hosts. Comes with a
+  minimal NGINX base image, built from source without TLS.
 home: https://nginx-static.ioanalytica.com
 icon: https://raw.githubusercontent.com/ioanalytica/nginx-static/main/icon.png
 sources:
@@ -37,8 +38,9 @@ keywords:
 # artifacthub.io/changes and artifacthub.io/prerelease when it packages the
 # chart (scripts/artifacthub-annotations.sh); they are not written here.
 #
-# No artifacthub.io/images: the chart runs the image of the site a release
-# names, and pins none of its own.
+# The image is the project's base image at the chart version, which is its
+# tag: the image the chart runs by default, and the one a site's image is
+# built on. Artifact Hub scans it for vulnerabilities.
 #
 # No category: Artifact Hub's list has none for a website, and
 # skip-prediction keeps it from guessing one.
@@ -52,6 +54,9 @@ annotations:
       url: https://nginx-static.ioanalytica.com/security/verify
     - name: support
       url: https://github.com/ioanalytica/nginx-static/issues
+  artifacthub.io/images: |
+    - name: nginx-static
+      image: ghcr.io/ioanalytica/nginx-static:0.2.2
 
 dependencies:
 - name: common

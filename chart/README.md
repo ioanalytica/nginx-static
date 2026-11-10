@@ -2,7 +2,7 @@
 
 <!-- #region intro -->
 
-A Helm chart that serves a static website from an NGINX image on Kubernetes: one release per site, with autoscaling, an Ingress for ingress-nginx or Traefik, and a permanent redirect from any number of alias hosts. Developed by [IO ANALYTICA](https://ioanalytica.com).
+A Helm chart that serves a static website from an NGINX image on Kubernetes: one release per site, with autoscaling, an Ingress for ingress-nginx or Traefik, and a permanent redirect from any number of alias hosts. It comes with a base image for a site's image to build on: NGINX built from source without TLS, one static binary of 2 MB. Developed by [IO ANALYTICA](https://ioanalytica.com).
 
 <!-- #endregion intro -->
 
@@ -10,14 +10,15 @@ A Helm chart that serves a static website from an NGINX image on Kubernetes: one
 
 <!-- #region features -->
 
-- **One release per site**: the chart runs the image a release names, and ships none of its own
+- **One release per site**: the chart runs the image a release names
+- **A base image made for the job**: NGINX built from source without TLS and without anything that proxies, one static binary in an image with no shell, no package manager and no OpenSSL; it runs as a non-root user on a read-only root filesystem
 - **Horizontal Pod Autoscaling** on CPU and memory, with extra metrics and a scaling behavior set from the values
 - **PodDisruptionBudget** that keeps the site up through node drains
 - **Ingress for three classes**: ingress-nginx, Traefik, and Traefik's ingress-nginx compatibility provider for the move from one to the other
 - **Redirect of alias hosts** to the site's URL, with one certificate for all of them; on Traefik it keeps the request path
 - **Resource presets** (nano through 2xlarge) for quick sizing
 - **Values schema**: Helm checks the values of every install and upgrade, and refuses a misspelled host entry or an unknown ingress class before anything is deployed
-- **Signed releases**: the chart is signed with Sigstore cosign, keyless
+- **Signed releases**: the chart and the base image are signed with Sigstore cosign, keyless; the image carries an SBOM and provenance
 
 <!-- #endregion features -->
 
@@ -29,7 +30,7 @@ A Helm chart that serves a static website from an NGINX image on Kubernetes: one
 - Helm 3.8+ (OCI registry support)
 - An ingress controller: [ingress-nginx](https://kubernetes.github.io/ingress-nginx/) or [Traefik](https://traefik.io/traefik) 3; for the redirect on Traefik, its `traefik.io/v1alpha1` resource kinds (`IngressRoute`, `Middleware`)
 - Optional: [cert-manager](https://cert-manager.io/) for the certificates, and a metrics server for autoscaling
-- An image that serves the site, see [The image](#the-image)
+- An image that serves the site: one built on the project's base image, or any other that meets [what the chart expects](#the-image)
 
 <!-- #endregion prerequisites -->
 
@@ -49,11 +50,11 @@ helm install my-site oci://ghcr.io/ioanalytica/charts/nginx-static \
   --set 'ingress.hosts[0].host=www.example.com'
 ```
 
-Three things have no usable default and are set for every release:
+Three things are set for every release:
 
 | Value | Why |
 |---|---|
-| `image.registry`, `image.repository`, `image.tag` | the image of the site; the defaults name a placeholder |
+| `image.registry`, `image.repository`, `image.tag` | the image of the site; the defaults name the base image, which serves a placeholder page |
 | `ingress.className` | `nginx`, `nginx-traefik` or `traefik`; the chart refuses to render without it, see [Ingress](#ingress) |
 | `ingress.hosts` | the hostnames of the site |
 
@@ -89,7 +90,7 @@ Without `--version`, Helm installs the latest release. The [`examples/`](https:/
 
 <!-- #region image -->
 
-The chart ships no image. A release names the image of the site it serves, and the chart expects three things of it:
+A release names the image of the site it serves. The chart expects three things of it:
 
 | The image | Value that changes it |
 |---|---|
@@ -99,34 +100,72 @@ The chart ships no image. A release names the image of the site it serves, and t
 
 TLS ends at the ingress controller: the pod serves plain HTTP inside the cluster, and the chart renders no HTTPS port.
 
-A site's image is typically the NGINX image with the site's files and a server block copied in:
+### The base image
+
+The project's base image, `ghcr.io/ioanalytica/nginx-static`, meets all three, and is what the chart runs by default. It is NGINX's stable release, built from source for exactly this place behind an ingress controller:
+
+- **No TLS.** NGINX is built without `http_ssl`, HTTP/2 and HTTP/3, so the image contains no OpenSSL at all.
+- **Nothing that proxies or generates.** No proxy, FastCGI, uwsgi, SCGI, gRPC or memcached module, no SSI, no directory listings, no basic authentication. What is compiled in serves files: static, index, gzip and gzip_static, rewrite, headers, access, realip, map, charset.
+- **One static binary.** The image is `FROM scratch`: NGINX, its configuration, and nothing else. No shell, no package manager, no libraries. It is about 2 MB, for `linux/amd64` and `linux/arm64`.
+- **Non-root, read-only.** It runs as user 101 and writes only below `/tmp`, so the root filesystem can be read-only, see [Security context](#security-context).
+- **Verified source.** A build checks the NGINX source against the signature of an NGINX developer.
+
+The image's tag is the chart version; the chart's `appVersion` names the NGINX in it.
+
+### A site's image
+
+A site's image is the base image with the site's files copied in:
 
 ```dockerfile
-FROM nginxinc/nginx-unprivileged:1.29-alpine
-COPY nginx/default.conf /etc/nginx/conf.d/default.conf
-COPY public/ /usr/share/nginx/html/
+FROM ghcr.io/ioanalytica/nginx-static:<version>
+COPY --chown=101:101 public/ /var/www/html/
+COPY custom.d/ /etc/nginx/custom.d/
 ```
 
+There is nothing to `RUN`: the image has no shell. A step that prepares the files, such as a build of the site or a hash in asset URLs, belongs in an earlier stage of the Dockerfile, on any image that has the tools, from which the final stage copies the result.
+
+The base image's one server block listens on port 8080 and includes every file in `/etc/nginx/custom.d/`. It ships these, and a site adds its own next to them:
+
+| File | What it sets |
+|---|---|
+| `00-gzip.conf` | gzip for text, fonts and the like |
+| `00-realip.conf` | the client's address from `X-Forwarded-For`, for requests from the cluster's private address ranges |
+| `00-timeouts.conf` | send and body timeouts |
+| `01-common.conf` | the document root `/var/www/html`, the access log, `X-Content-Type-Options` and `Referrer-Policy`, `/healthz`, and a 403 for hidden files |
+
+A file of the site with one of these names replaces it. A site that replaces `01-common.conf` defines `/healthz` itself.
+
+A site's own rules go into a file such as `02-site.conf`:
+
 ```nginx
-server {
-    listen 8080;
-    root /usr/share/nginx/html;
+# Files compressed at build time (style.css.gz next to style.css) are sent as they are.
+gzip_static on;
 
-    location = /healthz {
-        access_log off;
-        return 204;
-    }
+location = /old-page {
+    return 301 /new-page;
+}
 
-    # Hidden files are never served.
-    location ~ /\. {
-        return 404;
-    }
+# This is not a PHP site: whoever asks for one is a scanner.
+location ~ \.php$ {
+    return 404;
 }
 ```
 
-Rules that protect the site (denying hidden files, or script paths that scanners probe) belong in the image's NGINX configuration, as above, and not in annotations of the Ingress: in the image they hold whichever ingress controller is in front. The chart injects no such annotations.
+Rules that protect the site belong here, in the image's NGINX configuration, and not in annotations of the Ingress: in the image they hold whichever ingress controller is in front. The chart injects no such annotations.
 
-`image.tag` is set for every release. Left empty, it falls back to the chart's `appVersion`, which is the chart's own version and names no site image. `image.digest` takes the place of the tag when set, and pins the release to one build of the image.
+A directive of a module the image leaves out (`ssl_certificate`, `proxy_pass`, `http2`, `autoindex`) is an unknown directive to it. Check a site's image before it is deployed, with the binary it will run on:
+
+```bash
+docker run --rm registry.example.com/sites/my-site:1.0.0 -t
+```
+
+### Another image
+
+Any image that meets the three expectations works, for example one built on `nginxinc/nginx-unprivileged`. The settings for the base image under [Security context](#security-context) may then need adapting: a stock NGINX image writes to more places than `/tmp`.
+
+### Tag, digest and pull policy
+
+`image.tag` is set for a site's image. Left empty, it means the chart's version, which is the tag of the base image released with the chart. `image.digest` takes the place of the tag when set, and pins the release to one build of the image.
 
 The default pull policy is `Always`, so that a tag that was pushed again reaches the pods at their next start. With a tag per build, `IfNotPresent` saves the registry round trip.
 
@@ -290,7 +329,9 @@ The redirect needs `ingress.className` even while `ingress.enabled` is false, an
 
 <!-- #region security-context -->
 
-`podSecurityContext` and `containerSecurityContext` are empty by default: what a site's image tolerates is the image's business, and a setting it does not tolerate keeps the pods from starting. For an image that runs NGINX as a non-root user and listens on a port above 1024, such as one built on `nginxinc/nginx-unprivileged` (user id 101), this passes the `restricted` [Pod Security Standard](https://kubernetes.io/docs/concepts/security/pod-security-standards/):
+`podSecurityContext` and `containerSecurityContext` are empty by default: what a site's image tolerates is the image's business, and a setting it does not tolerate keeps the pods from starting.
+
+The base image, and a site's image built on it, is made for the strictest settings. These pass the `restricted` [Pod Security Standard](https://kubernetes.io/docs/concepts/security/pod-security-standards/) and mount the root filesystem read-only:
 
 ```yaml
 podSecurityContext:
@@ -302,13 +343,24 @@ podSecurityContext:
 
 containerSecurityContext:
   allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
   capabilities:
     drop: [ALL]
+
+# The one place NGINX writes to: its pid file and its temporary files.
+extraVolumes:
+  - name: tmp
+    emptyDir: {}
+extraVolumeMounts:
+  - name: tmp
+    mountPath: /tmp
 ```
 
-[Try it locally](https://github.com/ioanalytica/nginx-static/blob/main/examples/k3d/README.md) runs with these settings. `runAsUser` as a number matters where the image names its user by name (`USER nginx`): the kubelet cannot tell that a named user is not root, and refuses the pod under `runAsNonRoot`.
+[Try it locally](https://github.com/ioanalytica/nginx-static/blob/main/examples/k3d/README.md) runs with exactly these settings, in a namespace that enforces the standard.
 
-`readOnlyRootFilesystem: true` needs an image whose NGINX writes its pid file, its cache and its temporary files to a mounted volume; the chart mounts none.
+For another image, leave `readOnlyRootFilesystem` and the volume out unless the image is known to write nowhere else: a stock NGINX image also writes to `/var/cache/nginx` and `/run`. `runAsUser` as a number matters where an image names its user by name (`USER nginx`): the kubelet cannot tell that a named user is not root, and refuses the pod under `runAsNonRoot`.
+
+`extraVolumes` and `extraVolumeMounts` take any volume of a pod and any mount of the container.
 
 <!-- #endregion security-context -->
 
@@ -316,11 +368,13 @@ containerSecurityContext:
 
 <!-- #region chart-versions -->
 
-The chart follows [Semantic Versioning](https://semver.org/). Since it ships no image, `appVersion` has nothing of its own to name and equals the chart version.
+The chart follows [Semantic Versioning](https://semver.org/). A release builds the base image and the chart together, and the chart version is also the image's tag: chart `0.3.0` runs `ghcr.io/ioanalytica/nginx-static:0.3.0` by default. `appVersion` names the NGINX in that image.
+
+A new NGINX release, or a fix in a library NGINX is linked with, reaches a site in two steps: a release of this project builds the base image anew, and the site's image is built again on that tag.
 
 A release is the git tag of its version, without a `v` (`0.3.0`); the tags up to `v0.2.2` carried one. The chart in the registry never had it: `--version 0.2.2` and `--version 0.3.0` both work.
 
-A release candidate is published as `X.Y.Z-rc.N`. Helm skips it unless `--version` names it or `--devel` is given, and so does a version range.
+A release candidate is published as `X.Y.Z-rc.N`, chart and image. Helm skips it unless `--version` names it or `--devel` is given, and so does a version range.
 
 A published version is never published again. A change after a release, however small, gets the next version.
 
@@ -337,9 +391,15 @@ helm upgrade my-site oci://ghcr.io/ioanalytica/charts/nginx-static \
 
 The [changelog](https://github.com/ioanalytica/nginx-static/blob/main/chart/CHANGELOG.md) has every version. What an upgrade may ask of the values:
 
-### To a version with a values schema (after 0.2.2)
+### To a version with the base image (after 0.2.2)
 
-Helm checks the values against the chart's schema, and refuses an upgrade whose values it does not accept, with the path of the value:
+The default image is the project's base image, `ghcr.io/ioanalytica/nginx-static` at the chart's version, where it was a placeholder in a private registry. A release that sets `image.registry`, `image.repository` and `image.tag`, as every release of a site does, is not affected.
+
+An empty `image.tag` now means the chart's version, where it meant the chart's `appVersion`. The two were equal up to 0.2.2; `appVersion` now names the NGINX version of the base image.
+
+A site's image built on `nginx:alpine` or `nginx-unprivileged` keeps working with the chart. Moving it to the base image is a change to the image, see [A site's image](#a-sites-image): the base image brings its own `nginx.conf`, and has no TLS, HTTP/2, proxy or autoindex directives.
+
+Helm checks the values against the chart's schema as of this version, and refuses an upgrade whose values it does not accept, with the path of the value:
 
 - a switch (`*.enabled`) given as text, such as `--set-string ingress.enabled=false`. A template reads the text `"false"` as on, so the value never did what it said;
 - an entry of `ingress.hosts` with a key other than `host` and `paths`, or a path with a key other than `path` and `pathType`;

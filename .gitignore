@@ -1,6 +1,7 @@
 .*
 !.gitignore
 !.helmignore
+!.dockerignore
 !.github
 !.coderabbit.yaml
 nginx-static-*.tgz

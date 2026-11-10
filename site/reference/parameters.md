@@ -15,13 +15,13 @@ documentation covers which group of values.
 | `autoscaling`, `replicaCount`, `pdb` | [Autoscaling](/features/autoscaling) |
 | `ingress` | [Ingress](/features/ingress) |
 | `redirect` | [Redirect](/features/redirect) |
-| `podSecurityContext`, `containerSecurityContext` | [Security context](/security/security-context) |
+| `podSecurityContext`, `containerSecurityContext`, `extraVolumes`, `extraVolumeMounts` | [Security context](/security/security-context) |
 
 The remaining values are described in `values.yaml` alone: the names of the
 release's resources, labels and annotations, scheduling (`nodeSelector`,
 `tolerations`, `affinity`) and the Service (`service.type`, `service.port`,
 `service.annotations`).
 
-Three things have no usable default and are set for every release: the
-image, `ingress.className` and `ingress.hosts`. [Install](/guide/install)
+Three things are set for every release: the image of the site,
+`ingress.className` and `ingress.hosts`. [Install](/guide/install)
 shows them in a first values file.

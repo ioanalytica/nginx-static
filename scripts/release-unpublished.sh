@@ -4,7 +4,7 @@
 # version is never published again: deployments that pin it would not see
 # the new content, and a tag that moved names something nobody verified. The
 # prep job of release.yml runs it before anything is built, so a tag pushed
-# a second time stops there, not after the chart is built and signed. The
+# a second time stops there, not after the image and the chart are built and signed. The
 # next version is the way to publish a change.
 #
 # A re-run of a release's failed jobs does not come through here again, so

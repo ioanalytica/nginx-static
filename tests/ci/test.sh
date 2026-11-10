@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 #
-# Test for what CI and a release rely on outside the chart: the rules every
-# workflow follows, the scripts a release runs (tag check, release
-# candidates, release notes, Artifact Hub annotations, the tag after signing)
-# and the order of its jobs, the versions the page "Try it locally" names,
-# and the Renovate configuration. tests/ci/fake-oras/oras stands in for the
+# Test for what CI and a release rely on outside the chart and the image:
+# the rules every workflow follows, the scripts a release runs (tag check,
+# release candidates, release notes, Artifact Hub annotations, tags after
+# signing) and the order of its jobs, the daily CVE scan and the findings it
+# accepts, the versions the page "Try it locally" names, and the Renovate
+# configuration. tests/ci/fake-oras/oras stands in for the
 # registry.
 #
 # Needs yq, jq and python3 with PyYAML.
@@ -114,8 +115,8 @@ refuses "a candidate without a number"                 "$TAG_CHECK" "$version-rc
 refuses "a candidate number with a leading zero"       "$TAG_CHECK" "$version-rc.01"
 refuses "another suffix than rc"                       "$TAG_CHECK" "$version-beta.1"
 
-# The chart a candidate packages: the tag's version as version and as
-# appVersion, and nothing else changed.
+# The chart a candidate packages: the tag's version, and the base image at
+# it; appVersion stays.
 RELEASE_VERSION="$ROOT/scripts/chart-release-version.sh"
 cp "$ROOT/chart/Chart.yaml" "$WORK/Chart.yaml"
 accepts "a release leaves the chart as it is"          "$RELEASE_VERSION" "$version" "$WORK/Chart.yaml"
@@ -125,10 +126,11 @@ accepts "a candidate gets its version"                 "$RELEASE_VERSION" "$vers
 changed="$(diff "$ROOT/chart/Chart.yaml" "$WORK/Chart.yaml" | grep -c '^>' || true)"
 if [ "$changed" = 2 ] \
    && grep -qxF "version: $version-rc.1" "$WORK/Chart.yaml" \
-   && grep -qxF "appVersion: \"$version-rc.1\"" "$WORK/Chart.yaml"; then
-    ok "the candidate's chart names its version twice, and nothing else changed"
+   && grep -qxF "      image: ghcr.io/ioanalytica/nginx-static:$version-rc.1" "$WORK/Chart.yaml" \
+   && cmp -s <(grep '^appVersion:' "$ROOT/chart/Chart.yaml") <(grep '^appVersion:' "$WORK/Chart.yaml"); then
+    ok "the candidate's chart names its version and its image, and nothing else changed"
 else
-    fail "the candidate's chart: $changed lines changed, expected version and appVersion"
+    fail "the candidate's chart: $changed lines changed, expected version and the image"
 fi
 if [ "$(yq '.version' "$WORK/Chart.yaml")" = "$version-rc.1" ] && [ "$(yq '.dependencies | length' "$WORK/Chart.yaml")" = 1 ]; then
     ok "the candidate's Chart.yaml is still the chart's"
@@ -136,7 +138,7 @@ else
     fail "the candidate's Chart.yaml does not read as the chart's any more"
 fi
 printf 'version: 1.0.0\n' >"$WORK/short.yaml"
-refuses "a chart without an appVersion"                "$RELEASE_VERSION" 1.0.0-rc.1 "$WORK/short.yaml"
+refuses "a chart without the image entry"              "$RELEASE_VERSION" 1.0.0-rc.1 "$WORK/short.yaml"
 
 echo "=== Release notes and Artifact Hub changes come from the changelog"
 SECTION="$ROOT/scripts/changelog-section.sh"
@@ -187,6 +189,8 @@ if [ "$(yq '.annotations["artifacthub.io/prerelease"]' "$WORK/Chart.yaml")" = fa
 else fail "a release is marked as a prerelease"; fi
 if [ "$(yq '.annotations["artifacthub.io/links"]' "$WORK/Chart.yaml" | yq 'length')" -gt 0 ]; then ok "the links are still there"
 else fail "the links are gone"; fi
+if [ "$(yq '.annotations["artifacthub.io/images"]' "$WORK/Chart.yaml" | yq 'length')" = 1 ]; then ok "the images list is still there"
+else fail "the images list is gone"; fi
 refuses "a chart that has the annotations already"     "$ANNOTATE" 0.3.0 "$WORK/Chart.yaml" "$WORK/CHANGELOG.md"
 cp "$ROOT/chart/Chart.yaml" "$WORK/Chart.yaml"
 accepts "the annotations of a candidate"               "$ANNOTATE" 0.3.0-rc.1 "$WORK/Chart.yaml" "$WORK/CHANGELOG.md"
@@ -220,13 +224,39 @@ if [ "$(grep -m 1 '^## ' "$WORK/next.md")" = "## 0.5.0" ] && [ "$("$SECTION" 0.5
     ok "the new section is the first one"
 else fail "changelog-release.sh did not put 0.5.0 first"; fi
 
-echo "=== The tag is set after signing, and a published version stays"
+echo "=== Tags are set after signing, and a published version stays"
+TAG_IMAGES="$ROOT/scripts/release-tag-images.sh"
+I=ghcr.io/ioanalytica/nginx-static
 C=ghcr.io/ioanalytica/charts/nginx-static
+nl=$'\n'
 export ORAS_FAKE_STATE="$WORK/registry"
 mkdir -p "$ORAS_FAKE_STATE/runs"
+for pair in aaa:12 ccc:13 ddd:14 old:; do echo "${pair#*:}" >"$ORAS_FAKE_STATE/runs/sha256:${pair%%:*}"; done
 # tagged <image> <tag>: the digest the stand-in registry has for a tag.
 tagged() { cat "$ORAS_FAKE_STATE/tags/${1//\//_}/$2" 2>/dev/null || true; }
 with_oras() { PATH="$HERE/fake-oras:$PATH" "$@"; }
+
+accepts "a release tags the image"     with_oras "$TAG_IMAGES" 0.3.0 "$I@sha256:aaa" "$I:0.3.0$nl$I:latest"
+if [ "$(tagged "$I" 0.3.0)$(tagged "$I" latest)" = "sha256:aaasha256:aaa" ]; then
+    ok "the version and latest name the release's digest"
+else fail "tags after a release: $(grep -r . "$ORAS_FAKE_STATE/tags")"; fi
+accepts "a re-run of the tag job"      with_oras "$TAG_IMAGES" 0.3.0 "$I@sha256:aaa" "$I:0.3.0$nl$I:latest"
+refuses "latest for a candidate"       with_oras "$TAG_IMAGES" 0.3.1-rc.1 "$I@sha256:ccc" "$I:0.3.1-rc.1$nl$I:latest"
+if [ -z "$(tagged "$I" 0.3.1-rc.1)" ]; then ok "a refused list sets no tag at all"
+else fail "a refused list left a tag behind"; fi
+refuses "a tag of another image"       with_oras "$TAG_IMAGES" 0.3.1 "$I@sha256:ccc" "$C:0.3.1"
+refuses "an empty list"                with_oras "$TAG_IMAGES" 0.3.1 "$I@sha256:ccc" ""
+refuses "an index of no release run"   with_oras "$TAG_IMAGES" 0.3.1 "$I@sha256:old" "$I:0.3.1"
+refuses "a version published already"  with_oras "$TAG_IMAGES" 0.3.0 "$I@sha256:ddd" "$I:0.3.0$nl$I:latest"
+if [ "$(tagged "$I" 0.3.0)$(tagged "$I" latest)" = "sha256:aaasha256:aaa" ]; then ok "the published version and latest stay"
+else fail "a second build of 0.3.0 moved a tag"; fi
+accepts "a later release moves latest" with_oras "$TAG_IMAGES" 0.3.1 "$I@sha256:ddd" "$I:0.3.1$nl$I:latest"
+accepts "a late re-run of an older release" with_oras "$TAG_IMAGES" 0.3.2 "$I@sha256:ccc" "$I:0.3.2$nl$I:latest"
+if [ "$(tagged "$I" latest)" = "sha256:ddd" ] && [ "$(tagged "$I" 0.3.2)" = "sha256:ccc" ]; then
+    ok "latest stays on the later run's image"
+else fail "a late re-run moved latest back"; fi
+refuses "a registry that answers with an error" env ORAS_FAKE_BROKEN=1 PATH="$HERE/fake-oras:$PATH" \
+    "$TAG_IMAGES" 0.3.3 "$I@sha256:ddd" "$I:0.3.3"
 
 TAG_ONCE="$ROOT/scripts/release-tag-once.sh"
 accepts "the chart gets its version"   with_oras "$TAG_ONCE" "$C@sha256:eee" 0.3.0
@@ -253,13 +283,14 @@ if yq -e '.ignore[] | select(.name == "nginx-static" and .version == "-")' "$ROO
 else fail "artifacthub-repo.yml does not ignore versions with a -suffix"; fi
 
 UNPUBLISHED="$ROOT/scripts/release-unpublished.sh"
-accepts "a version the registry does not have" with_oras "$UNPUBLISHED" 0.9.9 "$C"
-refuses "a version the registry has"           with_oras "$UNPUBLISHED" 0.3.0 "$C"
+accepts "a version no repository has"          with_oras "$UNPUBLISHED" 0.9.9 "$I" "$C"
+refuses "a version one repository has"         with_oras "$UNPUBLISHED" 0.3.2 "$I" "$C"
 refuses "a registry error while asking"        env ORAS_FAKE_BROKEN=1 PATH="$HERE/fake-oras:$PATH" "$UNPUBLISHED" 0.9.9 "$C"
 
 echo "=== The release signs before it tags"
 RELEASE="$ROOT/.github/workflows/release.yml"
-if out="$(python3 "$HERE/check-release-workflow.py" "$RELEASE" 2>&1)"; then ok "one job signs, the tag follows the signature, the release follows the tag"
+BUILD="$ROOT/.github/workflows/build-image.yml"
+if out="$(python3 "$HERE/check-release-workflow.py" "$RELEASE" "$BUILD" 2>&1)"; then ok "one job signs, tags follow the signatures, the release follows the tags"
 else
     fail "the release workflow"
     printf '%s\n' "$out" | sed 's/^/      /'
@@ -278,9 +309,75 @@ if grep -qF "$lint" "$RELEASE" && grep -qF "$lint" "$ROOT/.github/workflows/test
     ok "release.yml and test.yml lint the chart the same way"
 else fail "release.yml and test.yml do not both run '$lint'"; fi
 
+# The smoke test of a release is the one of a pull request.
+smoke='./docker/tests/smoke-test.sh'
+if grep -qF "$smoke" "$RELEASE" && grep -qF "$smoke" "$ROOT/.github/workflows/test.yml"; then
+    ok "release.yml and test.yml run the same smoke test"
+else fail "release.yml and test.yml do not both run $smoke"; fi
+# The release's image and the chart's default are one name.
+if grep -qxF '      image: nginx-static' "$RELEASE" \
+   && [ "$(yq '.image.registry + "/" + .image.repository' "$ROOT/chart/values.yaml")" = "ghcr.io/ioanalytica/nginx-static" ]; then
+    ok "the release builds the image the chart runs by default"
+else fail "release.yml builds another image than chart/values.yaml names"; fi
+
+echo "=== The daily CVE scan"
+SCAN="$ROOT/.github/workflows/cve-scan.yml"
+if grep -qxF '  IMAGE: ghcr.io/ioanalytica/nginx-static:latest' "$SCAN"; then ok "the scan covers the base image at :latest"
+else fail "cve-scan.yml does not scan ghcr.io/ioanalytica/nginx-static:latest"; fi
+if grep -q 'trivyignores: .github/cve-scan-accepted.yaml' "$SCAN" && grep -q 'ignore-unfixed: true' "$SCAN"; then
+    ok "the scan's failing step reads the accepted findings and skips what has no fix"
+else
+    fail "cve-scan.yml no longer reads .github/cve-scan-accepted.yaml in a step with ignore-unfixed"
+fi
+# The scan sees the linked libraries only through the entries the image
+# carries: the Dockerfile writes them, the scan and the smoke test insist on
+# the same three.
+linked='musl pcre2-static zlib-static '
+if grep -qF "\"$linked\"" "$SCAN" && grep -qF "\"$linked\"" "$ROOT/docker/tests/smoke-test.sh" \
+   && grep -qF 'P:(musl|zlib-static|pcre2-static)' "$ROOT/docker/Dockerfile"; then
+    ok "the Dockerfile, the smoke test and the scan name the same linked libraries"
+else
+    fail "the linked libraries differ between docker/Dockerfile, the smoke test and cve-scan.yml"
+fi
+# Each accepted finding: the vulnerability, where it applies, why it waits,
+# and an expiry date at most three months out.
+if out="$(python3 - "$ROOT/.github/cve-scan-accepted.yaml" <<'PY' 2>&1
+import datetime, re, sys, yaml
+entries = (yaml.safe_load(open(sys.argv[1])) or {}).get("vulnerabilities") or []
+limit = datetime.date.today() + datetime.timedelta(days=93)
+problems = []
+seen = set()
+for entry in entries:
+    name = entry.get("id", "an entry without id")
+    if not re.fullmatch(r"(CVE-\d{4}-\d+|GHSA(-[0-9a-z]{4}){3})", str(entry.get("id", ""))):
+        problems.append(f"{name}: not a CVE or GHSA id")
+    if name in seen:
+        problems.append(f"{name}: listed twice")
+    seen.add(name)
+    if not (entry.get("paths") or entry.get("purls")):
+        problems.append(f"{name}: neither paths nor purls, so it would apply to every package")
+    if len(str(entry.get("statement", "")).split()) < 8:
+        problems.append(f"{name}: no statement that says why it waits and on what")
+    expiry = entry.get("expired_at")
+    if not isinstance(expiry, datetime.date):
+        problems.append(f"{name}: no expired_at date")
+    elif expiry > limit:
+        problems.append(f"{name}: expires {expiry}, more than three months out")
+    unknown = set(entry) - {"id", "paths", "purls", "statement", "expired_at"}
+    if unknown:
+        problems.append(f"{name}: unknown keys {sorted(unknown)}")
+print("\n".join(problems) if problems else f"{len(entries)} entries")
+sys.exit(1 if problems else 0)
+PY
+)"; then
+    ok "every accepted finding has a place, a reason and an expiry date ($out)"
+else
+    fail "accepted findings"
+    printf '%s\n' "$out" | sed 's/^/      /'
+fi
+
 echo "=== Latest is the release with the highest version"
 IS_LATEST="$ROOT/scripts/release-is-latest.sh"
-nl=$'\n'
 # latest <desc> <expected> <version> <published versions, one a line>
 latest() {
     local got
@@ -318,9 +415,13 @@ else fail "examples/k3d/README.md does not set url=$page_url and install with -f
 if [ -n "$page_chart" ] && grep -qF "helm install demo $page_chart " "$PAGE"; then
     ok "the page installs the chart the runner replaces"
 else fail "examples/k3d/README.md does not install $page_chart"; fi
-if grep -qF 'tests/try-locally/run.sh ./chart' "$TRY" && grep -qF "run.sh $page_chart --version" "$TRY"; then
-    ok "the workflow runs the page with the checkout's chart, and with a published version"
+# shellcheck disable=SC2016 # the workflow's own variable
+if grep -qF 'tests/try-locally/run.sh --import "$IMAGE" ./chart' "$TRY" && grep -qF "run.sh $page_chart --version" "$TRY"; then
+    ok "the workflow runs the page with the checkout's chart and image, and with a published version"
 else fail "try-locally.yml does not run tests/try-locally/run.sh with ./chart and with a version"; fi
+# The page names no image: it runs the chart's default, the base image.
+if grep -qE '^image:' "$ROOT/examples/k3d/values.yaml"; then fail "examples/k3d/values.yaml names an image"
+else ok "the page runs the chart's default image"; fi
 
 echo "=== Renovate configuration"
 RENOVATE="$ROOT/.github/renovate.json"
@@ -332,9 +433,11 @@ has "the file is JSON with the Renovate schema"  '."$schema" == "https://docs.re
 has "actions are pinned by digest"               '.extends | index("helpers:pinGitHubActionDigestsToSemver")'
 has "its commits are signed off"                 '.commitBody == "Signed-off-by: {{{gitAuthor}}}"'
 has "the common chart dependency stays manual"   '.helmv3.enabled == false'
-has "of the values files only the page's is read" '."helm-values".managerFilePatterns == ["/^examples/k3d/values\\.yaml$/"]'
+has "no values file is read for image pins"      '."helm-values".enabled == false'
+has "NGINX moves in the Dockerfile and in appVersion together" 'any(.customManagers[]; .depNameTemplate == "nginx/nginx" and (.managerFilePatterns | length) == 2)'
+has "a new NGINX branch waits for approval"      'any(.packageRules[]; .matchDepNames == ["nginx/nginx"] and .dependencyDashboardApproval == true)'
 has "a moved action tag waits for approval"      'any(.packageRules[]; .matchUpdateTypes == ["digest"] and .dependencyDashboardApproval == true)'
-has "the tests' fixtures are left alone"         '.ignorePaths | index("tests/**") and index("chart/tests/**")'
+has "the tests' fixtures are left alone"         '.ignorePaths | index("tests/**") and index("chart/tests/**") and index("docker/tests/**")'
 # Every *_VERSION the workflows pin is one the custom manager's pattern reads.
 pins="$(grep -rhc '# renovate: datasource=' "$ROOT/.github/workflows" "$ROOT/.github/actions" | paste -sd+ - | bc)"
 if [ "$pins" -ge 3 ]; then ok "$pins tool versions carry a renovate line"
