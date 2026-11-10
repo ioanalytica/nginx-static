@@ -178,6 +178,10 @@ refuses "a Traefik redirect without hosts"    "redirect.hosts must not be empty"
 refuses "a startup probe without a handler"   "probes.startup is enabled without a handler" --set ingress.className=nginx --set probes.startup.enabled=true
 refuses "a probe whose only handler is set to null" "probes.readiness is enabled without a handler" --set ingress.className=nginx \
     --set-json 'probes.readiness.tcpSocket=null'
+# A null where the chart has no default reaches the template as a key
+# without a value: it is no handler.
+refuses "a startup probe whose only handler is null" "probes.startup is enabled without a handler" --set ingress.className=nginx \
+    --set probes.startup.enabled=true --set-json 'probes.startup.tcpSocket=null'
 refuses "a second probe handler beside the default" "probes.readiness has more than one handler (httpGet, tcpSocket)" --set ingress.className=nginx \
     --set probes.readiness.httpGet.path=/ --set probes.readiness.httpGet.port=http
 refuses "a second handler of the liveness probe" "probes.liveness has more than one handler (exec, httpGet)" --set ingress.className=nginx \
@@ -240,6 +244,12 @@ expect "a default handler set to null is left out"   absent  'tcpSocket'        
 check  "a probe with another handler than the default" --set ingress.className=nginx \
     --set-json 'probes.readiness.tcpSocket=null' --set probes.readiness.httpGet.path=/ --set probes.readiness.httpGet.port=http \
     --set-json 'probes.liveness.httpGet=null' --set-json 'probes.liveness.exec={"command":["true"]}'
+expect "a null handler without a default is left out" absent 'tcpSocket: null'              --set ingress.className=nginx \
+    --set probes.startup.enabled=true --set-json 'probes.startup.tcpSocket=null' \
+    --set probes.startup.httpGet.path=/healthz --set probes.startup.httpGet.port=http
+check  "a null handler beside a valid one"           --set ingress.className=nginx \
+    --set probes.startup.enabled=true --set-json 'probes.startup.tcpSocket=null' \
+    --set probes.startup.httpGet.path=/healthz --set probes.startup.httpGet.port=http
 expect "extra probe keys pass through"               present 'failureThreshold: 7'         --set ingress.className=nginx --set probes.readiness.failureThreshold=7
 expect "a security context reaches the container"    present 'allowPrivilegeEscalation: false' --set ingress.className=nginx --set containerSecurityContext.allowPrivilegeEscalation=false
 expect "a security context reaches the pod"          present 'runAsNonRoot: true'          --set ingress.className=nginx --set podSecurityContext.runAsNonRoot=true

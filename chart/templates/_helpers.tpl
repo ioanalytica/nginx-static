@@ -11,13 +11,21 @@ would. Helm merges a release's values into the
 chart's defaults, so a release that gives a probe another kind of handler
 keeps the default one beside it unless it sets that one to null; the API
 server refuses such a probe with a message that does not name the value.
+Helm drops a null that overrides a default of the chart, but keeps one
+where the chart has no default (probes.startup.tcpSocket: null): such a
+handler counts as not set and is left out of the probe.
 Usage: {{ include "nginx-static.probe" (dict "name" "readiness" "probe" .Values.probes.readiness) }}
 */}}
 {{- define "nginx-static.probe" -}}
+{{- $probe := omit .probe "enabled" -}}
 {{- $handlers := list -}}
 {{- range $handler := list "exec" "grpc" "httpGet" "tcpSocket" -}}
-{{-   if hasKey $.probe $handler -}}
-{{-     $handlers = append $handlers $handler -}}
+{{-   if hasKey $probe $handler -}}
+{{-     if kindIs "invalid" (get $probe $handler) -}}
+{{-       $probe = omit $probe $handler -}}
+{{-     else -}}
+{{-       $handlers = append $handlers $handler -}}
+{{-     end -}}
 {{-   end -}}
 {{- end -}}
 {{- if not $handlers -}}
@@ -26,7 +34,7 @@ Usage: {{ include "nginx-static.probe" (dict "name" "readiness" "probe" .Values.
 {{- if gt (len $handlers) 1 -}}
 {{- fail (printf "probes.%s has more than one handler (%s); set the one that is not wanted to null" .name (join ", " $handlers)) -}}
 {{- end -}}
-{{- omit .probe "enabled" | toYaml -}}
+{{- $probe | toYaml -}}
 {{- end -}}
 
 {{/*
