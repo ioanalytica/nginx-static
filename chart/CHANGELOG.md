@@ -6,7 +6,7 @@
   was `/var/www/html/index.html`, which a site's image without an
   `index.html` of its own did not replace, so the site answered
   `/index.html` with the placeholder. The document root is now empty; `/`
-  shows the placeholder while the site has no `index.html`. A site that
+  shows the placeholder while the site has no start page. A site that
   defines its own `location = /` without replacing `01-common.conf` now
   fails the configuration check with a duplicate location and replaces that
   file.
