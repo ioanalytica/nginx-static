@@ -55,13 +55,13 @@ spec:
               containerPort: {{ .Values.containerPort }}
               protocol: TCP
           {{- if .Values.probes.readiness.enabled }}
-          readinessProbe: {{- omit .Values.probes.readiness "enabled" | toYaml | nindent 12 }}
+          readinessProbe: {{- include "nginx-static.probe" (dict "name" "readiness" "probe" .Values.probes.readiness) | nindent 12 }}
           {{- end }}
           {{- if .Values.probes.liveness.enabled }}
-          livenessProbe: {{- omit .Values.probes.liveness "enabled" | toYaml | nindent 12 }}
+          livenessProbe: {{- include "nginx-static.probe" (dict "name" "liveness" "probe" .Values.probes.liveness) | nindent 12 }}
           {{- end }}
           {{- if .Values.probes.startup.enabled }}
-          startupProbe: {{- omit .Values.probes.startup "enabled" | toYaml | nindent 12 }}
+          startupProbe: {{- include "nginx-static.probe" (dict "name" "startup" "probe" .Values.probes.startup) | nindent 12 }}
           {{- end }}
           {{- if ne .Values.resourcesPreset "" }}
           resources: {{- include "common.resources.preset" (dict "type" .Values.resourcesPreset) | nindent 12 }}

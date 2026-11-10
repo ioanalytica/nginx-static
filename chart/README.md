@@ -148,7 +148,7 @@ resourcesPreset: small    # nano, micro, small, medium, large, xlarge, 2xlarge
 
 A preset wins over `resources`. Autoscaling on CPU measures utilization against the request, so a request far above what a pod uses keeps the autoscaler from ever scaling up.
 
-Each of the three probes has a switch, and every other key under it goes into the container's probe as it is. So any field of a Kubernetes probe can be set, and a probe can be replaced by another kind:
+Each of the three probes has a switch, and every other key under it goes into the container's probe as it is. So any field of a Kubernetes probe can be set:
 
 ```yaml
 probes:
@@ -163,6 +163,21 @@ probes:
       port: http
     periodSeconds: 2
     failureThreshold: 30
+```
+
+A probe has one handler: `httpGet`, `tcpSocket`, `exec` or `grpc`. Helm merges a release's values into the chart's defaults, so a probe given another kind of handler would keep the default one beside it. Set the default handler to `null` to take it out; the chart refuses to render a probe with two:
+
+```yaml
+probes:
+  readiness:
+    tcpSocket: null        # the default handler of the readiness probe
+    httpGet:
+      path: /healthz
+      port: http
+  liveness:
+    httpGet: null          # the default handler of the liveness probe
+    exec:
+      command: [/usr/local/bin/healthcheck]
 ```
 
 The readiness probe is a TCP check on the container port by default: NGINX accepts connections once its configuration is loaded, and a static site has nothing else to wait for.

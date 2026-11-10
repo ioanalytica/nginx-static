@@ -4,6 +4,27 @@ SPDX-License-Identifier: Apache-2.0
 */}}
 
 {{/*
+A probe of the container: the keys of .Values.probes.<name> without its
+switch. A probe has one handler. Helm merges a release's values into the
+chart's defaults, so a release that gives a probe another kind of handler
+keeps the default one beside it unless it sets that one to null; the API
+server refuses such a probe with a message that does not name the value.
+Usage: {{ include "nginx-static.probe" (dict "name" "readiness" "probe" .Values.probes.readiness) }}
+*/}}
+{{- define "nginx-static.probe" -}}
+{{- $handlers := list -}}
+{{- range $handler := list "exec" "grpc" "httpGet" "tcpSocket" -}}
+{{-   if hasKey $.probe $handler -}}
+{{-     $handlers = append $handlers $handler -}}
+{{-   end -}}
+{{- end -}}
+{{- if gt (len $handlers) 1 -}}
+{{- fail (printf "probes.%s has more than one handler (%s); set the one that is not wanted to null" .name (join ", " $handlers)) -}}
+{{- end -}}
+{{- omit .probe "enabled" | toYaml -}}
+{{- end -}}
+
+{{/*
 Merged annotation map for the primary ingress: commonAnnotations + ingress.annotations.
 
 On className == "traefik" all `nginx.ingress.kubernetes.io/*` keys are

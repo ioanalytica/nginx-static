@@ -21,9 +21,9 @@ k3s 1.37.
 ## What you need
 
 - Docker
-- [k3d](https://k3d.io), `kubectl`, [Helm](https://helm.sh) 3.8 or later and
-  `curl` 7.85 or later, which resolves every name under `localhost` to this
-  machine by itself
+- [k3d](https://k3d.io), `kubectl` 1.31 or later (for `wait --for=create`),
+  [Helm](https://helm.sh) 3.8 or later and `curl` 7.85 or later, which
+  resolves every name under `localhost` to this machine by itself
 - the ports 8080 and 8443 free on the host
 
 ## 1. A cluster

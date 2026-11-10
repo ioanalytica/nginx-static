@@ -175,6 +175,10 @@ refuses "a redirect without a target"         "redirect.targetUrl is required"  
 refuses "a redirect without hosts"            "redirect.hosts must not be empty"    --set ingress.className=nginx --set redirect.enabled=true --set redirect.targetUrl=https://example.com
 refuses "a Traefik redirect without a target" "redirect.targetUrl is required"      --set ingress.className=traefik --set redirect.enabled=true --set 'redirect.hosts={www.example.com}'
 refuses "a Traefik redirect without hosts"    "redirect.hosts must not be empty"    --set ingress.className=traefik --set redirect.enabled=true --set redirect.targetUrl=https://example.com
+refuses "a second probe handler beside the default" "probes.readiness has more than one handler (httpGet, tcpSocket)" --set ingress.className=nginx \
+    --set probes.readiness.httpGet.path=/ --set probes.readiness.httpGet.port=http
+refuses "a second handler of the liveness probe" "probes.liveness has more than one handler (exec, httpGet)" --set ingress.className=nginx \
+    --set-json 'probes.liveness.exec={"command":["true"]}'
 refuses "an unknown resources preset"         "resourcesPreset"                     --set ingress.className=nginx --set resourcesPreset=huge
 
 echo "=== Ingress of the site"
@@ -228,6 +232,11 @@ expect "a preset wins over resources"                absent  'ephemeral-storage:
 expect "the liveness probe asks /healthz"            present 'path: /healthz'              --set ingress.className=nginx
 expect "a disabled probe is left out"                absent  'livenessProbe'               --set ingress.className=nginx --set probes.liveness.enabled=false
 expect "a probe's switch stays out of the manifest"  absent  'enabled:'                    --set ingress.className=nginx
+expect "a default handler set to null is left out"   absent  'tcpSocket'                    --set ingress.className=nginx \
+    --set-json 'probes.readiness.tcpSocket=null' --set probes.readiness.httpGet.path=/ --set probes.readiness.httpGet.port=http
+check  "a probe with another handler than the default" --set ingress.className=nginx \
+    --set-json 'probes.readiness.tcpSocket=null' --set probes.readiness.httpGet.path=/ --set probes.readiness.httpGet.port=http \
+    --set-json 'probes.liveness.httpGet=null' --set-json 'probes.liveness.exec={"command":["true"]}'
 expect "extra probe keys pass through"               present 'failureThreshold: 7'         --set ingress.className=nginx --set probes.readiness.failureThreshold=7
 expect "a security context reaches the container"    present 'allowPrivilegeEscalation: false' --set ingress.className=nginx --set containerSecurityContext.allowPrivilegeEscalation=false
 expect "a security context reaches the pod"          present 'runAsNonRoot: true'          --set ingress.className=nginx --set podSecurityContext.runAsNonRoot=true
@@ -258,8 +267,11 @@ for example in "$REPO"/examples/*/*.yaml; do
     examples=$((examples + 1))
     name="${example#"$REPO"/}"
     check "$name" -f "$example"
-    unknown="$(python3 "$HERE/check-example-keys.py" "$CHART/values.yaml" "$example")"
-    if [ -z "$unknown" ]; then ok "$name sets only keys of the chart"
+    # A check that fails (a values file that is no YAML) is one failure,
+    # not the end of the run: the other examples are still checked.
+    if ! unknown="$(python3 "$HERE/check-example-keys.py" "$CHART/values.yaml" "$example" 2>&1)"; then
+        fail "$name — check-example-keys.py failed: $(tail -n 1 <<<"$unknown")"
+    elif [ -z "$unknown" ]; then ok "$name sets only keys of the chart"
     else fail "$name sets keys the chart does not have: $(tr '\n' ' ' <<<"$unknown")"; fi
 done
 if [ "$examples" -ge 4 ]; then ok "$examples example values files found"
