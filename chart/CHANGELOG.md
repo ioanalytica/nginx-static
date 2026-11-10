@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.1
 
 * **The base image's placeholder page is no longer a file of the site.** It
   was `/var/www/html/index.html`, which a site's image without an
