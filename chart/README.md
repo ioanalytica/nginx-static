@@ -108,6 +108,7 @@ The project's base image, `ghcr.io/ioanalytica/nginx-static`, meets all three, a
 - **Nothing that proxies or generates.** No proxy, FastCGI, uwsgi, SCGI, gRPC or memcached module, no SSI, no directory listings, no basic authentication. What is compiled in serves files: static, index, gzip and gzip_static, rewrite, headers, access, realip, map, charset.
 - **One static binary.** The image is `FROM scratch`: NGINX, its configuration, and nothing else. No shell, no package manager, no libraries. It is about 2 MB, for `linux/amd64` and `linux/arm64`.
 - **Non-root, read-only.** It runs as user 101 and writes only below `/tmp`, so the root filesystem can be read-only, see [Security context](#security-context).
+- **Two workers.** NGINX runs two worker processes, whatever the node has in CPUs, so a pod's memory does not grow with the size of the node. More load is met by more pods.
 - **Verified source.** A build checks the NGINX source against the signature of an NGINX developer.
 
 The image's tag is the chart version; the chart's `appVersion` names the NGINX in it.

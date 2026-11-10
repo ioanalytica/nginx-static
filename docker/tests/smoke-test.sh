@@ -139,6 +139,12 @@ else ok "there is no shell to exec"; fi
 logs="$(docker logs "$NAME" 2>&1)"
 if [ -z "$logs" ]; then ok "NGINX starts without a warning, on a read-only root filesystem and without capabilities"
 else fail "NGINX logs at start: $logs"; fi
+# One master and the two workers of nginx.conf, whatever the host has in CPUs.
+top="$(docker top "$NAME" -eo pid,args)"
+processes="$(grep -c ' nginx: ' <<<"$top" || true)"
+workers="$(grep -c ' nginx: worker process' <<<"$top" || true)"
+if [ "$processes" = 3 ] && [ "$workers" = 2 ]; then ok "NGINX runs a master and two workers"
+else fail "NGINX runs $processes processes, $workers of them workers; expected a master and two workers"; fi
 ports="$(docker inspect "$IMAGE" --format '{{range $p, $_ := .Config.ExposedPorts}}{{$p}} {{end}}')"
 [ "$ports" = "8080/tcp " ] && ok "the image exposes port 8080 only" || fail "the image exposes '$ports'"
 
