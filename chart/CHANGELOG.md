@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 * **A base image.** The project builds its own NGINX image,
   `ghcr.io/ioanalytica/nginx-static`, for a site's image to build on: NGINX's
