@@ -24,7 +24,7 @@ FAILURES=0
 cleanup() {
     docker rm -f "$NAME" "$NAME-site" "$NAME-files" >/dev/null 2>&1 || true
     docker rmi -f "$SITE_IMAGE" >/dev/null 2>&1 || true
-    rm -f "${TLS_CONF:-}"
+    rm -rf "${TLS_CONF:-}" "${INDEX_DIR:-}"
 }
 trap cleanup EXIT
 
@@ -111,9 +111,16 @@ etc/os-release
 etc/passwd
 lib/apk/db/installed
 usr/sbin/nginx
-var/www/html/index.html
+usr/share/nginx-static/placeholder.html
 LIST
 )"
+# The document root is there and empty, and it is the site's to fill. GNU
+# tar prints the owner as 101/101, bsdtar in two columns.
+if docker export "$NAME-files" | tar -tvf - | grep -E ' (\./)?var/www/html/$' | grep -qE '^drwxr-xr-x.* 101[ /]+101 '; then
+    ok "the document root is an empty directory of user 101"
+else
+    fail "var/www/html is missing or not a directory of user 101"
+fi
 if [ "$files" = "$want" ]; then ok "the image holds NGINX, its configuration and nothing else ($(wc -l <<<"$files" | tr -d ' ') files)"
 else
     fail "the image's files differ from the list:"
@@ -149,12 +156,18 @@ ports="$(docker inspect "$IMAGE" --format '{{range $p, $_ := .Config.ExposedPort
 [ "$ports" = "8080/tcp " ] && ok "the image exposes port 8080 only" || fail "the image exposes '$ports'"
 
 echo "=== Requests"
-assert "the default page"                      200 /            "nginx-static base image"
+assert "the placeholder, while there is no site" 200 /            "nginx-static base image"
+# The document root is empty: the placeholder has no address of its own that
+# a site's image would inherit.
+assert "the placeholder is no file of the site" 404 /index.html
+assert "and its location is internal"          404 /nginx-static-placeholder
+assert "the placeholder answers GET and HEAD only" 405 / "" -X POST
+header "the 405 names the methods there are"   present '^Allow: GET, HEAD$'                / -X POST
+header "and keeps the security headers"        present '^X-Content-Type-Options: nosniff$' / -X POST
 assert "the liveness probe's path"             200 /healthz     "OK"
 assert "a file that is not there"              404 /nope
 assert "a hidden file"                         403 /.env
 assert "a hidden directory"                    403 /.git/config
-assert "a method a static site has no use for is still answered" 405 / "" -X POST
 header "the Server header names no version"    present '^Server: nginx$'                  /
 header "X-Content-Type-Options"                present '^X-Content-Type-Options: nosniff$' /
 header "the page is compressed when asked"     present '^Content-Encoding: gzip$'         / -H 'Accept-Encoding: gzip'
@@ -191,12 +204,16 @@ else
     fail "IMAGE -t: $out"
 fi
 PORT="$(start "$NAME-site" "$SITE_IMAGE")"
-assert "the site's page takes the place of the default one" 200 /         "The site of the smoke test"
+assert "the site's page takes the place of the placeholder" 200 /         "The site of the smoke test"
+assert "the site's page under its own name"                 200 /index.html "The site of the smoke test"
+assert "the placeholder is not part of the site"            404 /nginx-static-placeholder
 assert "the site's stylesheet"                              200 /style.css "color"
 assert "the site's own location"                            301 /old
 assert "a path the site refuses"                            418 /index.php
+assert "a method a static site has no use for is still answered" 405 / "" -X POST
 assert "the base image's rules still hold"                  403 /.env
 assert "and so does the probe's path"                       200 /healthz   "OK"
+header "a rule for /index.html holds for /"   present '^X-Smoke-Index: 1$'         /
 header "the stylesheet's type"                 present '^Content-Type: text/css'    /style.css
 # gzip_static: the file compressed at build time is sent as it is.
 if [ "$(curl -s -H 'Accept-Encoding: gzip' "http://127.0.0.1:$PORT/pre.css" | gunzip 2>/dev/null)" = "body{color:#222}" ]; then
@@ -204,6 +221,25 @@ if [ "$(curl -s -H 'Accept-Encoding: gzip' "http://127.0.0.1:$PORT/pre.css" | gu
 else
     fail "pre.css.gz is not served for pre.css"
 fi
+# A site that names its start page itself and has no index.html: the index
+# directive in force decides, not a list of the base image's.
+INDEX_DIR="$(mktemp -d)"
+mkdir "$INDEX_DIR/html"
+echo 'index home.html;' >"$INDEX_DIR/03-index.conf"
+echo 'The start page under another name' >"$INDEX_DIR/html/home.html"
+chmod -R a+rX "$INDEX_DIR"
+docker rm -f "$NAME-site" >/dev/null
+docker run -d --name "$NAME-site" --read-only --tmpfs /tmp:uid=101,gid=101,mode=1777 \
+    -v "$INDEX_DIR/03-index.conf:/etc/nginx/custom.d/03-index.conf:ro" \
+    -v "$INDEX_DIR/html:/var/www/html:ro" -p 127.0.0.1::8080 "$IMAGE" >/dev/null
+PORT=""
+for _ in $(seq 1 50); do
+    PORT="$(docker port "$NAME-site" 8080/tcp 2>/dev/null | sed -n 's/.*:\([0-9]*\)$/\1/p' | head -n 1)"
+    if [ -n "$PORT" ] && curl -s -o /dev/null "http://127.0.0.1:$PORT/healthz"; then break; fi
+    sleep 0.2
+done
+assert "an index directive of the site names the start page" 200 /           "The start page under another name"
+assert "and such a site has no placeholder either"           404 /index.html
 # A directive of a module the image leaves out fails the check, not the pod.
 TLS_CONF="$(mktemp)"
 echo 'ssl_protocols TLSv1.3;' >"$TLS_CONF"

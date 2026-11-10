@@ -16,3 +16,7 @@ repositoryID: 80292eb4-3fd7-459e-9009-6e064357ca4c
 ignore:
   - name: nginx-static
     version: '-'
+  # The versions before 0.2.0 run an image of a private registry by default,
+  # which Artifact Hub's scanner cannot reach and nobody outside can pull.
+  - name: nginx-static
+    version: '^0\.1\.'

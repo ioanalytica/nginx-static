@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.1
+
+* **The base image's placeholder page is no longer a file of the site.** It
+  was `/var/www/html/index.html`, which a site's image without an
+  `index.html` of its own did not replace, so the site answered
+  `/index.html` with the placeholder. The document root is now empty; `/`
+  shows the placeholder while the site has no start page. A site that
+  routes `/` in its own configuration replaces `01-common.conf`: its own
+  `location = /` now fails the configuration check as a duplicate, and its
+  `location /` is no longer asked for `/` itself.
+
+* **Artifact Hub no longer lists the chart versions 0.1.x**, whose default
+  image is in a private registry.
+
 ## 0.3.0
 
 * **A base image.** The project builds its own NGINX image,

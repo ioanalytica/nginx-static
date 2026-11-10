@@ -3,7 +3,7 @@
 
 apiVersion: v2
 name: nginx-static
-version: 0.3.0
+version: 0.3.1
 # The NGINX in the project's base image, NGINX_VERSION of docker/Dockerfile
 # (chart/tests/template-test.sh). The image's tag is the chart version.
 appVersion: "1.30.6"
@@ -56,7 +56,7 @@ annotations:
       url: https://github.com/ioanalytica/nginx-static/issues
   artifacthub.io/images: |
     - name: nginx-static
-      image: ghcr.io/ioanalytica/nginx-static:0.3.0
+      image: ghcr.io/ioanalytica/nginx-static:0.3.1
 
 dependencies:
 - name: common
