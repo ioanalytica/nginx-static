@@ -42,6 +42,7 @@
 * Tests for the templates, the schema, the workflows and the release
   scripts, and the page "Try it locally" end to end in k3d.
 * A documentation site, built from the READMEs.
+* The repository is registered on Artifact Hub; its metadata names the ID.
 
 ## 0.2.2
 

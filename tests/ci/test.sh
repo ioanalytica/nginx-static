@@ -248,6 +248,11 @@ accepts "a re-run of the same release pushes again" with_oras "$METADATA" "$C" 1
 refuses "a registry error while reading the metadata" env ORAS_FAKE_BROKEN=1 PATH="$HERE/fake-oras:$PATH" \
     "$METADATA" "$C" 15 "$ROOT/artifacthub-repo.yml"
 refuses "a metadata file that is not there"         with_oras "$METADATA" "$C" 15 "$WORK/none.yml"
+# Artifact Hub compares the ID with the one it gave the repository; anything
+# but a UUID is a mistyped one, and the repository would lose its mark.
+if [[ "$(yq '.repositoryID' "$ROOT/artifacthub-repo.yml")" =~ ^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$ ]]; then
+    ok "artifacthub-repo.yml names the repository's ID"
+else fail "artifacthub-repo.yml has no repositoryID in the form of a UUID"; fi
 if yq -e '.ignore[] | select(.name == "nginx-static" and .version == "-")' "$ROOT/artifacthub-repo.yml" >/dev/null 2>&1; then
     ok "artifacthub-repo.yml keeps release candidates out of the listing"
 else fail "artifacthub-repo.yml does not ignore versions with a -suffix"; fi
