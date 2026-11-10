@@ -10,7 +10,8 @@ Verifies that the resources of one render refer to each other correctly:
     Deployment with an autoscaler sets no replicas
   * every Ingress backend names the Service of the render and one of its
     ports, and the Service's targetPort is a port of the container
-  * a probe that names a port names one the container has
+  * a probe has exactly one handler, and one that names a port names one
+    the container has
   * an IngressRoute refers to a Middleware of the render, and a Certificate
     writes the Secret the IngressRoute reads
   * no two resources share kind and name
@@ -88,6 +89,12 @@ def main():
             for port in container.get("ports") or []:
                 ports.update({port.get("name"), port.get("containerPort")})
             for probe in ("readinessProbe", "livenessProbe", "startupProbe"):
+                if probe in container:
+                    # The key counts, whatever its value: `tcpSocket: null`
+                    # is no handler to Kubernetes and must not be rendered.
+                    handlers = sorted(set(container[probe] or {}) & {"exec", "grpc", "httpGet", "tcpSocket"})
+                    if len(handlers) != 1 or container[probe][handlers[0]] is None:
+                        problems.append(f"Deployment {name}: {probe} has the handlers {handlers}, expected exactly one")
                 for handler in ("httpGet", "tcpSocket", "grpc"):
                     port = ((container.get(probe) or {}).get(handler) or {}).get("port")
                     if port is not None and port not in ports:
