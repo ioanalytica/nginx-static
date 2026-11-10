@@ -165,7 +165,7 @@ probes:
     failureThreshold: 30
 ```
 
-A probe has one handler: `httpGet`, `tcpSocket`, `exec` or `grpc`. Helm merges a release's values into the chart's defaults, so a probe given another kind of handler would keep the default one beside it. Set the default handler to `null` to take it out; the chart refuses to render a probe with two:
+A probe has one handler: `httpGet`, `tcpSocket`, `exec` or `grpc`. Helm merges a release's values into the chart's defaults, so a probe given another kind of handler would keep the default one beside it. Set the default handler to `null` to take it out; the chart refuses to render a probe with two, and one that is enabled without any, as the startup probe is until it is given a handler:
 
 ```yaml
 probes:

@@ -5,7 +5,9 @@ SPDX-License-Identifier: Apache-2.0
 
 {{/*
 A probe of the container: the keys of .Values.probes.<name> without its
-switch. A probe has one handler. Helm merges a release's values into the
+switch. A probe has exactly one handler. The startup probe has none by
+default, so switching it on without one is refused here, as the API server
+would. Helm merges a release's values into the
 chart's defaults, so a release that gives a probe another kind of handler
 keeps the default one beside it unless it sets that one to null; the API
 server refuses such a probe with a message that does not name the value.
@@ -17,6 +19,9 @@ Usage: {{ include "nginx-static.probe" (dict "name" "readiness" "probe" .Values.
 {{-   if hasKey $.probe $handler -}}
 {{-     $handlers = append $handlers $handler -}}
 {{-   end -}}
+{{- end -}}
+{{- if not $handlers -}}
+{{- fail (printf "probes.%s is enabled without a handler; set one of exec, grpc, httpGet and tcpSocket under it" .name) -}}
 {{- end -}}
 {{- if gt (len $handlers) 1 -}}
 {{- fail (printf "probes.%s has more than one handler (%s); set the one that is not wanted to null" .name (join ", " $handlers)) -}}

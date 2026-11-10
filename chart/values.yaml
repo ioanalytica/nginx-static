@@ -85,7 +85,7 @@ resources:
 ## @param probes.liveness.httpGet.port Port the liveness probe requests
 ## @param probes.liveness.initialDelaySeconds Seconds before the first liveness probe
 ## @param probes.liveness.periodSeconds Seconds between two liveness probes
-## @param probes.startup.enabled Enable the startup probe; set its handler and timing next to this key
+## @param probes.startup.enabled Enable the startup probe; it has no handler by default, so set one (such as httpGet) and its timing next to this key
 ##
 probes:
   readiness:

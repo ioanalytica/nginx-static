@@ -233,7 +233,7 @@
           "type": "object",
           "properties": {
             "enabled": {
-              "description": "Enable the startup probe; set its handler and timing next to this key",
+              "description": "Enable the startup probe; it has no handler by default, so set one (such as httpGet) and its timing next to this key",
               "type": "boolean",
               "default": false
             }

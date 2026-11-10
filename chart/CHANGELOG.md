@@ -22,10 +22,11 @@
   strict YAML parser such as the one of Flux refuses. The two are merged, and
   `service.annotations` wins.
 
-* **A probe with two handlers is refused.** A release that gives a probe
-  another kind of handler keeps the chart's default one beside it unless it
-  sets that one to `null`. The chart now fails to render such a probe and
-  names the value, where the API server refused the Deployment.
+* **A probe with two handlers, or with none, is refused.** A release that
+  gives a probe another kind of handler keeps the chart's default one beside
+  it unless it sets that one to `null`, and the startup probe has no handler
+  until it is given one. The chart now fails to render such a probe and names
+  the value, where the API server refused the Deployment.
 
 * Every value is documented in `values.yaml`, and the chart's README covers
   the image the chart expects, the three ingress classes, the redirect and

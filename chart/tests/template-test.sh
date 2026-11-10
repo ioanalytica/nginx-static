@@ -175,6 +175,9 @@ refuses "a redirect without a target"         "redirect.targetUrl is required"  
 refuses "a redirect without hosts"            "redirect.hosts must not be empty"    --set ingress.className=nginx --set redirect.enabled=true --set redirect.targetUrl=https://example.com
 refuses "a Traefik redirect without a target" "redirect.targetUrl is required"      --set ingress.className=traefik --set redirect.enabled=true --set 'redirect.hosts={www.example.com}'
 refuses "a Traefik redirect without hosts"    "redirect.hosts must not be empty"    --set ingress.className=traefik --set redirect.enabled=true --set redirect.targetUrl=https://example.com
+refuses "a startup probe without a handler"   "probes.startup is enabled without a handler" --set ingress.className=nginx --set probes.startup.enabled=true
+refuses "a probe whose only handler is set to null" "probes.readiness is enabled without a handler" --set ingress.className=nginx \
+    --set-json 'probes.readiness.tcpSocket=null'
 refuses "a second probe handler beside the default" "probes.readiness has more than one handler (httpGet, tcpSocket)" --set ingress.className=nginx \
     --set probes.readiness.httpGet.path=/ --set probes.readiness.httpGet.port=http
 refuses "a second handler of the liveness probe" "probes.liveness has more than one handler (exec, httpGet)" --set ingress.className=nginx \
