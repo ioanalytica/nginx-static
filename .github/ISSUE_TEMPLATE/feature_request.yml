@@ -1,5 +1,5 @@
 name: Feature request
-description: Something the chart should do, or do differently.
+description: Something the chart or the base image should do, or do differently.
 labels: [enhancement]
 body:
   - type: textarea

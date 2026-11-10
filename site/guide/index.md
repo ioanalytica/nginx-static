@@ -7,10 +7,12 @@ editPage: true
 
 <!--@include: ../../chart/README.md#intro-->
 
-nginx-static is a Helm chart without an image of its own. A release names the
-image of the site it serves, an NGINX with the site's files in it, and the
-chart puts what a site needs around it; [The image](/reference/image) says
-what the chart expects of that image.
+nginx-static is a Helm chart and a base image. A release names the image of
+the site it serves, an NGINX with the site's files in it, and the chart puts
+what a site needs around it. The base image is what a site's image is built
+on: NGINX from source, without TLS, as one static binary.
+[The image](/reference/image) says how a site's image is built, and what the
+chart expects of one that is built on something else.
 
 ## Features
 

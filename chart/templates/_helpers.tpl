@@ -4,6 +4,17 @@ SPDX-License-Identifier: Apache-2.0
 */}}
 
 {{/*
+The image of the container. An empty image.tag means the chart's version:
+a release builds the base image and the chart together and gives both that
+version, while appVersion names the NGINX in that image. A digest wins over
+the tag, and global.imageRegistry over the registry, as in the common chart.
+Usage: {{ include "nginx-static.image" . }}
+*/}}
+{{- define "nginx-static.image" -}}
+{{- include "common.images.image" (dict "imageRoot" .Values.image "global" .Values.global "chart" (dict "AppVersion" .Chart.Version)) -}}
+{{- end -}}
+
+{{/*
 A probe of the container: the keys of .Values.probes.<name> without its
 switch. A probe has exactly one handler. The startup probe has none by
 default, so switching it on without one is refused here, as the API server

@@ -16,7 +16,7 @@ export default defineConfig({
   lang: 'en-US',
   title: 'nginx-static',
   description:
-    'A Helm chart that serves a static website from an NGINX image on Kubernetes, with autoscaling, an Ingress for ingress-nginx or Traefik, and a redirect from alias hosts.',
+    'A Helm chart that serves a static website from an NGINX image on Kubernetes, with autoscaling, an Ingress for ingress-nginx or Traefik, and a redirect from alias hosts, and a minimal NGINX base image built from source without TLS.',
   cleanUrls: true,
   // No `base`: the site is served from the root of its own domain (siteUrl in
   // links.ts), set as the custom domain in the repository's Pages settings,

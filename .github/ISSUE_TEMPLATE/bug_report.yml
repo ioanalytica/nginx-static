@@ -1,5 +1,5 @@
 name: Bug report
-description: Something in the chart does not work as documented.
+description: Something in the chart or the base image does not work as documented.
 labels: [bug]
 body:
   - type: markdown
@@ -10,7 +10,7 @@ body:
     id: version
     attributes:
       label: Chart version
-      description: The chart version, as `helm list` shows it.
+      description: The chart version, as `helm list` shows it, which is also the tag of the `ghcr.io/ioanalytica/nginx-static` image.
       placeholder: "0.3.0"
     validations:
       required: true
@@ -19,6 +19,7 @@ body:
     attributes:
       label: Where is the problem?
       options:
+        - Base image (NGINX build, shipped configuration)
         - Deployment, Service, autoscaling
         - Ingress of the site
         - Redirect

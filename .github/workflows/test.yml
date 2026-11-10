@@ -2,11 +2,11 @@ name: Test
 
 # Pull requests run every job whatever files they touch: there is no `paths`
 # filter on that trigger. A workflow skipped by a path filter leaves its
-# checks pending, so a ruleset that requires `chart-test` would block every
-# pull request outside the filter for good. The jobs take about a minute,
-# less than the review of the pull request, so they are not skipped for
-# changes that cannot affect them either: a list of such changes would have
-# to follow every file the tests come to read.
+# checks pending, so a ruleset that requires `smoke-test` and `chart-test`
+# would block every pull request outside the filter for good. The jobs take
+# about a minute, less than the review of the pull request, so they are not
+# skipped for changes that cannot affect them either: a list of such changes
+# would have to follow every file the tests come to read.
 #
 # Pushes to main keep the filter. No merge waits for their result.
 #
@@ -18,6 +18,7 @@ on:
     branches:
       - main
     paths:
+      - 'docker/**'
       - 'chart/**'
       - 'examples/**'
       - 'scripts/**'
@@ -28,11 +29,37 @@ on:
   # publishes only what they have passed.
   workflow_call:
 
-# Every job only reads the repository.
+# Every job only reads the repository. The build cache (type=gha) uses the
+# runner's own cache token, not GITHUB_TOKEN.
 permissions:
   contents: read
 
 jobs:
+  smoke-test:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ./docker
+          platforms: linux/amd64
+          load: true
+          tags: nginx-static:smoke-test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Run smoke test
+        run: ./docker/tests/smoke-test.sh nginx-static:smoke-test
+
   chart-test:
     runs-on: ubuntu-26.04
     timeout-minutes: 15
@@ -89,6 +116,36 @@ jobs:
 
       - name: Run shellcheck
         run: ./tests/ci/shellcheck.sh
+
+  hadolint:
+    runs-on: ubuntu-26.04
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install hadolint
+        env:
+          # renovate: datasource=github-releases depName=hadolint/hadolint
+          HADOLINT_VERSION: 2.15.1
+          # The sum of hadolint-linux-x86_64 in the release's checksums.sha256,
+          # copied here and not read from the release at run time: a replaced
+          # release would bring its own sums. It moves with the version, by
+          # hand; this step fails until it matches.
+          HADOLINT_SHA256: c7187db94eeeeca956519a6af171adc31453941a1e777961f6e680f697c8c507
+        run: |
+          curl -fsSL -o "$RUNNER_TEMP/hadolint" \
+            "https://github.com/hadolint/hadolint/releases/download/v${HADOLINT_VERSION}/hadolint-linux-x86_64"
+          echo "$HADOLINT_SHA256  $RUNNER_TEMP/hadolint" | sha256sum -c -
+          sudo install -m 0755 "$RUNNER_TEMP/hadolint" /usr/local/bin/hadolint
+          hadolint --version
+
+      # Every Dockerfile of the repository; an `ignore` comment in the file
+      # says why a rule does not apply to a line.
+      - name: Run hadolint
+        run: git ls-files -z '*Dockerfile' '*Dockerfile.*' | xargs -0 hadolint
 
   # The oras a release installs (.github/actions/setup-oras), against the sum
   # the action pins: a new version without its sum fails here, not in the

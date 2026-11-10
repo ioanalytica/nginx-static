@@ -7,12 +7,17 @@
 # commands are read from the page, so a command changed there is a command
 # changed in the test.
 #
-#   tests/try-locally/run.sh [CHART [HELM_FLAG...]]
+#   tests/try-locally/run.sh [--import IMAGE] [CHART [HELM_FLAG...]]
 #
 # CHART takes the place of the released chart the page installs: a chart
 # directory (./chart, with its dependencies resolved), or the page's own
 # oci:// address followed by `--version X.Y.Z`. Without it the page runs as
 # written, with the latest release. The values file is always the checkout's.
+#
+# --import loads an image of the local Docker daemon into the cluster and
+# has the release never pull it: the base image built from the checkout,
+# under the name the chart asks for, where the registry does not have the
+# chart's version yet.
 #
 # The cluster gets a kubeconfig of its own, so the run changes neither the
 # current context nor the file of whoever starts it, and is deleted at the
@@ -27,9 +32,15 @@ PAGE_URL="https://raw.githubusercontent.com/ioanalytica/nginx-static/main/exampl
 PAGE_CHART="oci://ghcr.io/ioanalytica/charts/nginx-static"
 CLUSTER="nginx-static"
 
+import=""
+if [ "${1:-}" = "--import" ]; then
+  import="${2:?--import needs an image}"
+  shift 2
+fi
 chart="${1:-}"
 [ $# -eq 0 ] || shift
 extra="$*"
+[ -z "$import" ] || extra="${extra:+$extra }--set image.pullPolicy=Never"
 if [ -n "$chart" ] && [ -d "$chart" ]; then chart="$(cd "$chart" && pwd)"; fi
 
 for tool in docker k3d kubectl helm curl; do
@@ -95,6 +106,12 @@ for block in "${blocks[@]}"; do
   expected="$WORK/$name.out"
   if [ ! -e "$expected" ]; then
     bash -euo pipefail "$script"
+    # Right after the block that creates the cluster.
+    if [ -n "$import" ] && grep -q '^k3d cluster create' "$script"; then
+      echo "--- import $import"
+      k3d image import "$import" -c "$CLUSTER"
+      import_done=1
+    fi
     continue
   fi
   # A block whose output the page shows asks something of the cluster that
@@ -117,6 +134,10 @@ for block in "${blocks[@]}"; do
   fi
 done
 
+if [ -n "$import" ] && [ -z "${import_done:-}" ]; then
+  echo "run.sh: no block of the page creates the cluster, so $import was never imported" >&2
+  exit 1
+fi
 if [ "$failures" -gt 0 ]; then
   echo "=== $failures block(s) of the page print something else than the page shows"
   exit 1

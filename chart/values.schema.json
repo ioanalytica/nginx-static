@@ -61,15 +61,15 @@
         "registry": {
           "description": "Registry of the site's image",
           "type": "string",
-          "default": "harbor.ioanalytica.com"
+          "default": "ghcr.io"
         },
         "repository": {
           "description": "Repository of the site's image",
           "type": "string",
-          "default": "io/websites/example"
+          "default": "ioanalytica/nginx-static"
         },
         "tag": {
-          "description": "Tag of the site's image; set it for every release (empty falls back to the chart's appVersion, which names no site image)",
+          "description": "Tag of the site's image; empty means the chart's version, which is the tag of the base image released with it",
           "type": "string",
           "default": ""
         },
@@ -250,6 +250,22 @@
       "description": "Security context of the container",
       "type": "object",
       "default": {}
+    },
+    "extraVolumes": {
+      "description": "Extra volumes of the pod, such as an emptyDir for /tmp under a read-only root filesystem",
+      "type": [
+        "array",
+        "string"
+      ],
+      "default": []
+    },
+    "extraVolumeMounts": {
+      "description": "Extra volume mounts of the container",
+      "type": [
+        "array",
+        "string"
+      ],
+      "default": []
     },
     "podLabels": {
       "description": "Extra labels for the pods; they are part of the selector of the Deployment, the Service and the PodDisruptionBudget",

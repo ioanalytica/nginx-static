@@ -27,6 +27,7 @@ const sitePages: Record<string, string> = {
   'chart/README.md#redirect': '/features/redirect',
   'chart/README.md#resources-and-probes': '/features/resources',
   'chart/README.md#security-context': '/security/security-context',
+  'chart/README.md#a-sites-image': '/reference/image#a-site-s-image',
   'chart/README.md#the-image': '/reference/image',
   'chart/README.md#upgrading': '/operations/upgrading',
   'examples/k3d/README.md': '/guide/try-locally',

@@ -117,6 +117,10 @@ passes --set-string 'commonAnnotations=team: {{ .Release.Name }}'
 passes --set-string 'podAnnotations=team: ops'
 passes --set-string 'service.annotations=team: ops'
 
+passes --set-json 'extraVolumes=[{"name":"tmp","emptyDir":{}}]' --set-json 'extraVolumeMounts=[{"name":"tmp","mountPath":"/tmp"}]'
+passes --set-string 'extraVolumes=- name: tmp
+  emptyDir: {}' --set-json 'extraVolumeMounts=[{"name":"tmp","mountPath":"/tmp"}]'
+
 echo "=== A key the schema does not list is left to the chart"
 passes --set unknownTopLevel.key=1
 passes --set image.unknown=1
@@ -140,6 +144,7 @@ refused /redirect/targetUrl          --set-json 'redirect.targetUrl=["https://ex
 refused /redirect/hosts              --set-string redirect.hosts=www.example.com
 refused /redirect/hosts/0            --set-json 'redirect.hosts=[{"host":"www.example.com"}]'
 refused /redirect/tls                --set-string 'redirect.tls=- secretName: a'
+refused /extraVolumes                --set-json 'extraVolumes={"name":"tmp"}'
 refused /tolerations                 --set-json 'tolerations={}'
 refused /nodeSelector                --set-json 'nodeSelector=[]'
 refused /commonLabels                --set-string 'commonLabels=team: ops'
