@@ -1,0 +1,59 @@
+# Copyright IO ANALYTICA. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+apiVersion: v2
+name: nginx-static
+version: 0.2.2
+# The chart ships no image of its own, so there is no application version to
+# name: appVersion follows the chart version (chart/tests/template-test.sh).
+appVersion: "0.2.2"
+type: application
+
+description: >-
+  Serves a static website from an NGINX image on Kubernetes: Deployment,
+  autoscaling, PodDisruptionBudget, an Ingress for ingress-nginx or Traefik,
+  and a permanent redirect from any number of alias hosts.
+home: https://nginx-static.ioanalytica.com
+icon: https://raw.githubusercontent.com/ioanalytica/nginx-static/main/icon.png
+sources:
+- https://github.com/ioanalytica/nginx-static
+
+maintainers:
+- name: IO ANALYTICA
+  url: https://ioanalytica.com
+
+keywords:
+- nginx
+- static
+- website
+- web
+- http
+- ingress
+- traefik
+- redirect
+
+# What Artifact Hub shows for the chart
+# (https://artifacthub.io/docs/topics/annotations/helm/). A release adds
+# artifacthub.io/changes and artifacthub.io/prerelease when it packages the
+# chart (scripts/artifacthub-annotations.sh); they are not written here.
+#
+# No artifacthub.io/images: the chart runs the image of the site a release
+# names, and pins none of its own.
+#
+# No category: Artifact Hub's list has none for a website, and
+# skip-prediction keeps it from guessing one.
+annotations:
+  artifacthub.io/category: skip-prediction
+  artifacthub.io/license: Apache-2.0
+  artifacthub.io/links: |
+    - name: Changelog
+      url: https://nginx-static.ioanalytica.com/reference/changelog
+    - name: Verify a release
+      url: https://nginx-static.ioanalytica.com/security/verify
+    - name: support
+      url: https://github.com/ioanalytica/nginx-static/issues
+
+dependencies:
+- name: common
+  repository: oci://ghcr.io/ioanalytica/charts
+  version: 0.1.x

@@ -1,6 +1,0 @@
-dependencies:
-- name: common
-  repository: oci://ghcr.io/ioanalytica/charts
-  version: 0.1.1
-digest: sha256:1e2d40454c0aad3b5ede4b636203ed6ca50350d3b73357584474b0fd0ac23b38
-generated: "2026-05-26T13:57:22.436888+02:00"

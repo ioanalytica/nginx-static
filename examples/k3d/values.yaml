@@ -1,0 +1,46 @@
+# Values of the page "Try it locally" (examples/k3d/README.md): the chart in
+# a throwaway k3d cluster, with the stock unprivileged NGINX image standing in
+# for a site's image, and a redirect from an alias host.
+
+image:
+  registry: docker.io
+  repository: nginxinc/nginx-unprivileged
+  tag: 1.29.3-alpine
+  pullPolicy: IfNotPresent
+
+# The stock image has no /healthz; its welcome page answers the probe.
+probes:
+  liveness:
+    httpGet:
+      path: /
+
+# The settings of the chart's README for an image that runs NGINX as a
+# non-root user; the namespace could enforce the restricted Pod Security
+# Standard.
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 101
+  runAsGroup: 101
+  seccompProfile:
+    type: RuntimeDefault
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop: [ALL]
+
+# One node, no metrics to speak of: a fixed single replica.
+autoscaling:
+  enabled: false
+pdb:
+  enabled: false
+
+ingress:
+  className: traefik
+  hosts:
+    - host: site.localhost
+
+redirect:
+  enabled: true
+  targetUrl: http://site.localhost:8080
+  hosts:
+    - www.site.localhost

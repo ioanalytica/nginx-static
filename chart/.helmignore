@@ -1,0 +1,7 @@
+# Left out of the packaged chart.
+.DS_Store
+tests/
+*.swp
+*.bak
+*.tmp
+*.orig

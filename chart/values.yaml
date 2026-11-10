@@ -1,0 +1,261 @@
+# Copyright IO ANALYTICA. All Rights Reserved.
+# SPDX-License-Identifier: Apache-2.0
+
+## @section Global parameters
+##
+
+## @param global.imageRegistry Global image registry; replaces image.registry when set
+## @param global.imagePullSecrets Global registry secret names as an array
+##
+global:
+  imageRegistry: ""
+  imagePullSecrets: []
+
+## @section Common parameters
+##
+
+## @param nameOverride String to partially override the release's resource names
+## @param fullnameOverride String to fully override the release's resource names
+## @param namespaceOverride String to override the namespace the resources are deployed to
+## @param kubeVersion Kubernetes version the chart renders for, instead of the cluster's
+## @param commonLabels Labels to add to all deployed objects
+## @param commonAnnotations Annotations to add to the Deployment, Service, HPA and PodDisruptionBudget
+##
+nameOverride: ""
+fullnameOverride: ""
+namespaceOverride: ""
+kubeVersion: ""
+commonLabels: {}
+commonAnnotations: {}
+
+## @section Image parameters
+##
+## The chart ships no image of its own: every release names the image of the
+## site it serves. The image has to listen on containerPort as a non-root
+## user, and answer the probes below (GET /healthz by default).
+##
+
+## @param image.registry Registry of the site's image
+## @param image.repository Repository of the site's image
+## @param image.tag Tag of the site's image; set it for every release (empty falls back to the chart's appVersion, which names no site image)
+## @param image.digest Digest of the site's image (sha256:...); takes the place of the tag when set
+## @param image.pullPolicy Image pull policy
+## @param image.pullSecrets Registry secret names as an array
+##
+image:
+  registry: harbor.ioanalytica.com
+  repository: io/websites/example
+  tag: ""
+  digest: ""
+  pullPolicy: Always
+  pullSecrets: []
+
+## @section Workload parameters
+##
+
+## @param replicaCount Number of replicas; read only while autoscaling.enabled is false
+## @param containerPort Port the site's image listens on
+##
+replicaCount: 1
+containerPort: 8080
+
+## @param resourcesPreset Resource preset of the common chart (nano, micro, small, medium, large, xlarge, 2xlarge); wins over resources when set
+## @param resources Resource requests and limits of the container; read while resourcesPreset is empty
+##
+resourcesPreset: ""
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+    ephemeral-storage: 50Mi
+  limits:
+    cpu: 250m
+    memory: 128Mi
+    ephemeral-storage: 256Mi
+
+## Every key of a probe besides `enabled` goes into the container's probe
+## as it is, so any field of a Kubernetes probe can be set.
+##
+## @param probes.readiness.enabled Enable the readiness probe
+## @param probes.readiness.tcpSocket.port Port the readiness probe connects to
+## @param probes.readiness.initialDelaySeconds Seconds before the first readiness probe
+## @param probes.readiness.periodSeconds Seconds between two readiness probes
+## @param probes.liveness.enabled Enable the liveness probe
+## @param probes.liveness.httpGet.path Path the liveness probe requests
+## @param probes.liveness.httpGet.port Port the liveness probe requests
+## @param probes.liveness.initialDelaySeconds Seconds before the first liveness probe
+## @param probes.liveness.periodSeconds Seconds between two liveness probes
+## @param probes.startup.enabled Enable the startup probe; it has no handler by default, so set one (such as httpGet) and its timing next to this key
+##
+probes:
+  readiness:
+    enabled: true
+    tcpSocket:
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 2
+  liveness:
+    enabled: true
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 20
+  startup:
+    enabled: false
+
+## @param podSecurityContext Security context of the pod
+## @param containerSecurityContext Security context of the container
+## @param podLabels Extra labels for the pods; they are part of the selector of the Deployment, the Service and the PodDisruptionBudget
+## @param podAnnotations Annotations for the pods
+## @param nodeSelector Node labels for pod assignment
+## @param tolerations Tolerations for pod assignment
+## @param affinity Affinity for pod assignment
+##
+podSecurityContext: {}
+containerSecurityContext: {}
+podLabels: {}
+podAnnotations: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+## @section Autoscaling parameters
+##
+
+## @param autoscaling.enabled Deploy a HorizontalPodAutoscaler; replicaCount is then not read
+## @param autoscaling.minReplicas Minimum number of replicas
+## @param autoscaling.maxReplicas Maximum number of replicas
+## @param autoscaling.targetCPUUtilizationPercentage Target CPU utilization in percent of the request; 0 leaves the metric out
+## @param autoscaling.targetMemoryUtilizationPercentage Target memory utilization in percent of the request; 0 leaves the metric out
+## @param autoscaling.metrics Extra metrics, appended to spec.metrics as they are
+## @param autoscaling.behavior.scaleUp.stabilizationWindowSeconds Seconds the autoscaler looks back before it scales up
+## @param autoscaling.behavior.scaleUp.policies Policies that limit how fast the autoscaler scales up
+## @param autoscaling.behavior.scaleDown.stabilizationWindowSeconds Seconds the autoscaler looks back before it scales down
+## @param autoscaling.behavior.scaleDown.policies Policies that limit how fast the autoscaler scales down
+##
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 5
+  targetCPUUtilizationPercentage: 70
+  targetMemoryUtilizationPercentage: 0
+  metrics: []
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 15
+      policies:
+        - type: Percent
+          value: 100
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+
+## @section PodDisruptionBudget parameters
+##
+
+## @param pdb.enabled Deploy a PodDisruptionBudget
+## @param pdb.minAvailable Pods that must stay available, as a number or a percentage; empty leaves it out
+## @param pdb.maxUnavailable Pods that may be unavailable, as a number or a percentage; empty leaves it out
+##
+pdb:
+  enabled: true
+  minAvailable: 1
+  maxUnavailable: ""
+
+## @section Service parameters
+##
+
+## @param service.type Type of the Service
+## @param service.port Port of the Service
+## @param service.annotations Annotations for the Service, added to commonAnnotations
+##
+service:
+  type: ClusterIP
+  port: 80
+  annotations: {}
+
+## @section Ingress parameters
+##
+## ingress.className has no default and is required while the Ingress or the
+## redirect is enabled: in a cluster with more than one controller a default
+## would pick one silently. The three classes:
+##
+##   nginx          ingress-nginx serves the site (kind: Ingress). The
+##                  redirect is a second Ingress with the annotation
+##                  nginx.ingress.kubernetes.io/permanent-redirect, which
+##                  drops the request path.
+##   nginx-traefik  Traefik's kubernetesIngressNGINX provider serves the site
+##                  (kind: Ingress) and translates most nginx annotations.
+##                  The redirect is rendered as for traefik.
+##   traefik        Traefik's kubernetesIngress provider serves the site
+##                  (kind: Ingress); nginx.ingress.kubernetes.io/* annotations
+##                  are left out of it. The redirect is a Middleware and an
+##                  IngressRoute, keeps the request path, and gets a
+##                  Certificate when redirect.annotations names a
+##                  cert-manager cluster issuer.
+##
+
+## @param ingress.enabled Deploy the Ingress of the site
+## @param ingress.className Ingress class: nginx, nginx-traefik or traefik; required while ingress.enabled or redirect.enabled is true
+## @param ingress.pathType Path type of a path that names none
+## @param ingress.commonAnnotations Annotations for the Ingress and for every resource of the redirect
+## @param ingress.annotations Annotations for the Ingress of the site only, on top of ingress.commonAnnotations
+## @param ingress.hosts Hosts of the site, each with `host` and optional `paths` (`path`, `pathType`); a host without paths serves `/`
+## @param ingress.tls TLS entries of the Ingress, each with `hosts` and `secretName`
+##
+ingress:
+  enabled: true
+  className: ""
+  pathType: ImplementationSpecific
+  commonAnnotations: {}
+  annotations: {}
+  hosts:
+    - host: example.com
+      paths:
+        - path: /
+          pathType: ImplementationSpecific
+  tls: []
+  ## Example:
+  ## tls:
+  ##   - hosts:
+  ##       - example.com
+  ##     secretName: example-com-tls
+
+## @section Redirect parameters
+##
+## Every host in redirect.hosts answers with a permanent redirect to
+## redirect.targetUrl. All hosts share one TLS entry, so cert-manager issues
+## one certificate for the whole list.
+##
+
+## @param redirect.enabled Deploy the redirect for redirect.hosts
+## @param redirect.targetUrl URL the hosts redirect to, without a trailing slash; required while redirect.enabled is true
+## @param redirect.annotations Annotations for the resources of the redirect, on top of ingress.commonAnnotations; cert-manager.io/cluster-issuer makes the Traefik classes render a Certificate
+## @param redirect.hosts Hostnames that redirect; required while redirect.enabled is true
+## @param redirect.tls TLS entries of the redirect, each with `hosts` and `secretName`; the Traefik classes read the first entry's secretName
+##
+redirect:
+  enabled: false
+  targetUrl: ""
+  annotations: {}
+  hosts: []
+  tls: []
+## Example:
+## redirect:
+##   enabled: true
+##   targetUrl: https://example.com
+##   annotations:
+##     cert-manager.io/cluster-issuer: letsencrypt-prod
+##   hosts:
+##     - www.example.com
+##     - example.net
+##   tls:
+##     - hosts:
+##         - www.example.com
+##         - example.net
+##       secretName: example-aliases-tls
