@@ -1,8 +1,18 @@
 # nginx-static
 
-A Helm chart that serves a static website from an NGINX image on Kubernetes, and a minimal NGINX image to build the site's image on. Developed by [IO ANALYTICA](https://ioanalytica.com).
+**[Documentation](https://nginx-static.ioanalytica.com)** ·
+[Install](https://nginx-static.ioanalytica.com/guide/install) ·
+[The image](https://nginx-static.ioanalytica.com/reference/image) ·
+[Try it locally](https://nginx-static.ioanalytica.com/guide/try-locally) ·
+[Releases](https://github.com/ioanalytica/nginx-static/releases)
 
-Documentation: [nginx-static.ioanalytica.com](https://nginx-static.ioanalytica.com)
+[![Test](https://github.com/ioanalytica/nginx-static/actions/workflows/test.yml/badge.svg?branch=main)](https://github.com/ioanalytica/nginx-static/actions/workflows/test.yml)
+[![Daily CVE scan](https://github.com/ioanalytica/nginx-static/actions/workflows/cve-scan.yml/badge.svg?branch=main)](https://github.com/ioanalytica/nginx-static/actions/workflows/cve-scan.yml)
+[![Release](https://img.shields.io/github/v/release/ioanalytica/nginx-static)](https://github.com/ioanalytica/nginx-static/releases/latest)
+[![Artifact Hub](https://img.shields.io/endpoint?url=https://artifacthub.io/badge/repository/nginx-static)](https://artifacthub.io/packages/helm/nginx-static/nginx-static)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+
+A Helm chart that serves a static website from an NGINX image on Kubernetes, and a minimal NGINX image to build the site's image on. Developed by [IO ANALYTICA](https://ioanalytica.com).
 
 ## Components
 
