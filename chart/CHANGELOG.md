@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.3.2
+
+* **NGINX 1.30.7** in the base image, where it was 1.30.6. The release
+  fixes nine security issues
+  ([advisories](https://nginx.org/en/security_advisories.html)). Seven are
+  in modules the base image is built without: TLS, HTTP/2, HTTP/3, mail and
+  stream. Two are in code it contains: a buffer overflow when `alias` is
+  used with `try_files` (CVE-2026-125283), and a use-after-free in the
+  resolver (CVE-2026-123634). The base image's own configuration uses
+  neither `try_files` nor a resolver; a site's configuration may. A site's
+  image has to be rebuilt on this version to get the fixes.
+
 ## 0.3.1
 
 * **The base image's placeholder page is no longer a file of the site.** It
