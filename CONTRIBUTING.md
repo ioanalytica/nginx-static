@@ -219,16 +219,35 @@ Renovate opens the pull requests for new versions of GitHub Actions, the
 tools the workflows install, NGINX and the Alpine the base image is built
 with, the k3s of the page "Try it locally" and the site's packages
 (`.github/renovate.json`). The `common` chart the chart depends on moves by
-hand, with a release.
+hand, with a release. The config extends the shared preset of
+[ioanalytica/renovate-config](https://github.com/ioanalytica/renovate-config):
+early on Mondays (Europe/Berlin), for releases at least three days old, a
+security fix at any time, each with a review request, and never merged by the
+bot. Nothing waits for approval on its Dependency Dashboard issue: an update
+that is a deliberate move (a new major, a moved action tag, a new NGINX
+stable branch or Alpine release) comes as a pull request with the label
+`decision`. Closing it declines that version; Renovate proposes the next one.
+
+The sums of oras and hadolint, which `.github/actions/setup-oras` and
+`.github/actions/setup-hadolint` check their downloads against, are listed in
+[`.github/checksums.yaml`](.github/checksums.yaml). On the bot's branch, the
+workflow `.github/workflows/pin-checksums.yml` fills them from the release,
+after checking the PGP signature of the oras sums, as a signed commit of the
+GitHub App `ioanalytica-renovate-helper`. When a check fails it commits
+nothing and says why in a comment; the rebase checkbox of the pull request
+runs it again (a re-run by hand does nothing). A new hash pin needs its entry
+in the table (`tests/ci/test.sh`), and a pin belongs in a local action under
+`.github/actions/`, not in a workflow: the app may not change workflows.
 
 A new NGINX release of the stable branch comes as one pull request that
 raises `NGINX_VERSION` in `docker/Dockerfile` and `appVersion` in
 `chart/Chart.yaml`, which the template test holds equal; it needs its line
-under `## Unreleased`. A new stable branch waits for approval on Renovate's
-dashboard. The libraries NGINX is linked with are not pinned: every release
-build installs Alpine's current packages. When the daily scan reports a fix
-for one of them, the next release brings it; a release with nothing else in
-it is fine.
+under `## Unreleased`. A release signed with a key that is not in
+`docker/keys/` fails the build until the key is added by hand. A new stable
+branch carries the label `decision`. The libraries NGINX is linked with are
+not pinned: every release build installs Alpine's current packages. When the
+daily scan reports a fix for one of them, the next release brings it; a
+release with nothing else in it is fine.
 
 A tag is never moved and a version is never published a second time: a
 deployment that pins a version would not see the change. The release workflow

@@ -1,20 +1,10 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "description": "Dependency update pull requests for nginx-static: GitHub Actions and the tools the workflows install, NGINX and the Alpine the base image is built with, the k3s of the page Try it locally, the documentation site's npm packages. The common chart dependency moves with the chart's releases. tests/ci/test.sh guards what the bot updates and what stays manual.",
+  "description": "Dependency update pull requests for nginx-static, on the shared preset of ioanalytica/renovate-config (schedule, minimum release age, DCO, review requests, the label decision): GitHub Actions and the tools the workflows install, NGINX and the Alpine the base image is built with, the k3s of the page Try it locally, the documentation site's npm packages. The common chart dependency moves with the chart's releases. The hash pins that go with a version pin are .github/checksums.yaml's: the workflow pin-checksums.yml fills them on the bot's branch. tests/ci/test.sh guards what the bot updates and what stays manual.",
   "extends": [
-    "config:recommended",
-    "helpers:pinGitHubActionDigestsToSemver"
+    "github>ioanalytica/renovate-config#v1.0.2"
   ],
-  "timezone": "Europe/Berlin",
-  "schedule": [
-    "* 0-5 * * 1"
-  ],
-  "prConcurrentLimit": 5,
-  "rebaseWhen": "conflicted",
-  "minimumReleaseAge": "3 days",
   "semanticCommits": "disabled",
-  "commitBody": "Signed-off-by: {{{gitAuthor}}}",
-  "configMigration": true,
   "ignorePaths": [
     "**/node_modules/**",
     "chart/tests/**",
@@ -93,14 +83,11 @@
       "groupName": "GitHub Actions"
     },
     {
-      "description": "A new digest under the same version means a release tag was moved: approve it on the dashboard after a look at the commit.",
-      "matchManagers": [
-        "github-actions"
+      "description": "The preset this file extends and the workflow pin-checksums.yml calls, both of ioanalytica/renovate-config, move in one pull request. The preset has this group too, but its rules come before this file's: here, after the group GitHub Actions, it wins for the workflow's pin.",
+      "matchDepNames": [
+        "ioanalytica/renovate-config"
       ],
-      "matchUpdateTypes": [
-        "digest"
-      ],
-      "dependencyDashboardApproval": true
+      "groupName": "renovate-config"
     },
     {
       "description": "The Renovate that renovate-config.yml runs, once a month: Renovate releases most days.",
@@ -112,22 +99,6 @@
       ],
       "schedule": [
         "* 0-5 1 * *"
-      ]
-    },
-    {
-      "matchDepNames": [
-        "hadolint/hadolint"
-      ],
-      "prBodyNotes": [
-        "The job `hadolint` fails until `HADOLINT_SHA256` in .github/workflows/test.yml is the sum of `hadolint-linux-x86_64` in https://github.com/hadolint/hadolint/releases/download/v{{{newVersion}}}/checksums.sha256."
-      ]
-    },
-    {
-      "matchDepNames": [
-        "oras-project/oras"
-      ],
-      "prBodyNotes": [
-        "The job `oras` fails until `ORAS_SHA256` in .github/actions/setup-oras/action.yml is the sum of `oras_{{{newVersion}}}_linux_amd64.tar.gz` in https://github.com/oras-project/oras/releases/download/v{{{newVersion}}}/oras_{{{newVersion}}}_checksums.txt."
       ]
     },
     {
@@ -188,7 +159,7 @@
       ]
     },
     {
-      "description": "A new NGINX stable branch (1.30 to 1.32) waits for approval on the dashboard: a deliberate move, like a new Alpine release below.",
+      "description": "A new NGINX stable branch (1.30 to 1.32) is a deliberate move, like a new Alpine release below: its pull request carries the label decision.",
       "matchDepNames": [
         "nginx/nginx"
       ],
@@ -196,10 +167,12 @@
         "major",
         "minor"
       ],
-      "dependencyDashboardApproval": true
+      "addLabels": [
+        "decision"
+      ]
     },
     {
-      "description": "The Alpine the base image is built with. Its digest moves often and changes nothing by itself, since every release installs the packages afresh: once a month. A new Alpine release waits for approval on the dashboard.",
+      "description": "The Alpine the base image is built with. Its digest moves often and changes nothing by itself, since every release installs the packages afresh: once a month. A new Alpine release carries the label decision.",
       "matchManagers": [
         "dockerfile"
       ],
@@ -224,7 +197,9 @@
         "major",
         "minor"
       ],
-      "dependencyDashboardApproval": true
+      "addLabels": [
+        "decision"
+      ]
     }
   ]
 }
