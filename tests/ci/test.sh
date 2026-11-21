@@ -84,6 +84,14 @@ jobs:
     uses: ./.github/workflows/other.yml
     permissions:
       id-token: write
+  seven:
+    uses: example/renovate-config/.github/workflows/pin-checksums.yml@b893c2228d48ab719081276e6f9f7dbf0ec5cb6c # v1.0.1
+    permissions:
+      id-token: write
+  eight:
+    uses: ioanalytica/renovate-config/.github/workflows/pin-checksums.yml@b893c2228d48ab719081276e6f9f7dbf0ec5cb6c # v1.0.1
+    permissions:
+      id-token: write
 BAD
 out="$(python3 "$HERE/check-workflows.py" "$WORK/bad" 2>&1 || true)"
 for needle in "not pinned by a commit SHA" "has no '# vX.Y.Z' comment" "no timeout-minutes" \
@@ -92,10 +100,14 @@ for needle in "not pinned by a commit SHA" "has no '# vX.Y.Z' comment" "no timeo
               "job two has permissions: write-all" "job five has permissions: write-all" \
               "job four: docker/login-action@v4 is not pinned" \
               "job five: example/workflows/.github/workflows/build.yml@main is not pinned" \
-              "more than one job can get an OIDC token: bad.yml: job three; bad.yml: job four; bad.yml: job six"; do
+              "more than one job can get an OIDC token: bad.yml: job three; bad.yml: job four; bad.yml: job six; bad.yml: job seven"; do
     if grep -qF -- "$needle" <<<"$out"; then ok "the checker reports: $needle"
     else fail "the checker misses: $needle"; fi
 done
+# The caller of renovate-config's pin-checksums workflow may have the token;
+# a workflow of that name from another repository may not (job seven above).
+if grep -qF "job eight" <<<"$out"; then fail "the checker counts the pin-checksums caller as an OIDC job"
+else ok "the checker lets the pin-checksums caller of renovate-config have an OIDC token"; fi
 
 echo "=== Release tag check"
 TAG_CHECK="$ROOT/scripts/check-release-tag.sh"
@@ -435,14 +447,81 @@ has() {
     if jq -e "$2" "$RENOVATE" >/dev/null 2>&1; then ok "$1"; else fail "$1"; fi
 }
 has "the file is JSON with the Renovate schema"  '."$schema" == "https://docs.renovatebot.com/renovate-schema.json"'
-has "actions are pinned by digest"               '.extends | index("helpers:pinGitHubActionDigestsToSemver")'
-has "its commits are signed off"                 '.commitBody == "Signed-off-by: {{{gitAuthor}}}"'
+# The preset of ioanalytica/renovate-config pins actions by digest, signs the
+# commits off, and labels majors and moved action tags decision.
+has "it extends the shared preset at a release, and nothing else" '.extends | length == 1 and (.[0] | test("^github>ioanalytica/renovate-config#v[0-9]+\\.[0-9]+\\.[0-9]+$"))'
+has "no update waits for approval on the dashboard" '[.. | objects | select(has("dependencyDashboardApproval"))] | length == 0'
 has "the common chart dependency stays manual"   '.helmv3.enabled == false'
 has "no values file is read for image pins"      '."helm-values".enabled == false'
 has "NGINX moves in the Dockerfile and in appVersion together" 'any(.customManagers[]; .depNameTemplate == "nginx/nginx" and (.managerFilePatterns | length) == 2)'
-has "a new NGINX branch waits for approval"      'any(.packageRules[]; .matchDepNames == ["nginx/nginx"] and .dependencyDashboardApproval == true)'
-has "a moved action tag waits for approval"      'any(.packageRules[]; .matchUpdateTypes == ["digest"] and .dependencyDashboardApproval == true)'
+has "a new NGINX branch is labelled decision"    'any(.packageRules[]; .matchDepNames == ["nginx/nginx"] and .addLabels == ["decision"])'
+has "a new Alpine release is labelled decision"  'any(.packageRules[]; .matchManagers == ["dockerfile"] and .matchUpdateTypes == ["major", "minor"] and .addLabels == ["decision"])'
 has "the tests' fixtures are left alone"         '.ignorePaths | index("tests/**") and index("chart/tests/**") and index("docker/tests/**")'
+# The preset and the workflow pin-checksums.yml come from the same release,
+# and Renovate moves both in one pull request. The preset's packageRules come
+# before this file's, so its group renovate-config would lose the workflow's
+# pin to a group of this file that may match it (the github-actions manager,
+# its datasource github-tags, its name or a pattern of names): the rule here
+# comes after every such group.
+has "the preset and the pin-checksums workflow move in one pull request" '
+  .packageRules | to_entries
+  | ([.[] | select(.value.matchDepNames == ["ioanalytica/renovate-config"] and .value.groupName == "renovate-config") | .key] | max) as $own
+  | ([.[] | select(.value.groupName != null and .value.groupName != "renovate-config"
+                   and ((.value.matchManagers // ["github-actions"]) | index("github-actions"))
+                   and ((.value.matchDatasources // ["github-tags"]) | index("github-tags"))
+                   and ((.value.matchDepNames // ["*"]) | any(.[]; . == "ioanalytica/renovate-config" or test("^[/!]|[*?{]")))
+                   and ((.value.matchPackageNames // ["*"]) | any(.[]; . == "ioanalytica/renovate-config" or test("^[/!]|[*?{]")))) | .key] | max // -1) as $other
+  | $own != null and $own > $other'
+preset="$(jq -r '.extends[0] | sub(".*#"; "")' "$RENOVATE")"
+if grep -qE "uses: ioanalytica/renovate-config/\.github/workflows/pin-checksums\.yml@[0-9a-f]{40} # $preset\$" "$ROOT/.github/workflows/pin-checksums.yml"; then
+    ok "pin-checksums.yml calls the workflow of the preset's release, $preset"
+else fail "pin-checksums.yml does not call renovate-config's workflow at $preset, the preset's release"; fi
+# Every hash pin is one the workflow pin-checksums.yml fills: a pin missing
+# from .github/checksums.yaml would make every pull request that moves its
+# version red until someone copies the sum by hand. A hash pin is any
+# assignment whose value is a sum of 64 hex digits or more, whatever its
+# name; an image digest reads sha256:…, a commit 40. The workflow may not
+# change workflows, so a pin there belongs in a local action, and each
+# entry's version is one a custom manager moves.
+if out="$(python3 - "$ROOT" <<'PY' 2>&1
+import glob, os, re, sys, yaml
+root = sys.argv[1]
+table = yaml.safe_load(open(f"{root}/.github/checksums.yaml"))
+listed = {(p["file"], p["var"]) for e in table for p in e["pins"]}
+pin = re.compile(r"^\s*(?:(?:ARG|export)\s+)?(\w+)\s*(?:=|:\s)\s*[\"']?[0-9a-fA-F]{64}", re.M)
+# A Dockerfile instruction continues over lines that end in a backslash,
+# with comment lines in between; ENV takes several KEY=value pairs.
+continued = re.compile(r"\\\n(?:[ \t]*#.*\n)*")
+env = re.compile(r"^\s*ENV\s.*$", re.M)
+env_pair = re.compile(r"(?:^|\s)(\w+)(?:=|\s+)[\"']?[0-9a-fA-F]{64}")
+problems = []
+files = sorted(glob.glob(f"{root}/.github/workflows/*.y*ml") + glob.glob(f"{root}/.github/actions/*/action.y*ml")
+               + glob.glob(f"{root}/docker/**/Dockerfile*", recursive=True))
+for path in (os.path.relpath(f, root) for f in files):
+    instructions = continued.sub(" ", open(f"{root}/{path}").read())
+    for var in (v for line in env.findall(instructions) for v in env_pair.findall(line[line.index("ENV") + 3:])):
+        problems.append(f"{path}: {var} is a hash pin in an ENV line, which pin-checksums.yml does not fill; write it as ARG")
+    for var in pin.findall(open(f"{root}/{path}").read()):
+        if path.startswith(".github/workflows/"):
+            problems.append(f"{path}: {var} is a hash pin in a workflow, which pin-checksums.yml may not change; it belongs in a local action")
+        elif (path, var) not in listed:
+            problems.append(f"{path}: {var} is not in .github/checksums.yaml")
+for e in table:
+    name, (path, var) = e["name"], e["version"].split("#")
+    if not re.search(rf"# renovate: .*\n *(?:ARG )?{var}[=:]", open(f"{root}/{path}").read()):
+        problems.append(f"{name}: {var} in {path} has no # renovate: line above it")
+    for p in e["pins"]:
+        if p["file"].startswith(".github/workflows/"):
+            problems.append(f"{name}: {p['file']} is a workflow, which the app may not change")
+print("\n".join(problems) if problems else f"{len(listed)} pins")
+sys.exit(1 if problems else 0)
+PY
+)"; then
+    ok "every hash pin is one .github/checksums.yaml fills ($out)"
+else
+    fail "hash pins"
+    printf '%s\n' "$out" | sed 's/^/      /'
+fi
 # Every *_VERSION the workflows pin is one the custom manager's pattern reads.
 pins="$(grep -rhc '# renovate: datasource=' "$ROOT/.github/workflows" "$ROOT/.github/actions" | paste -sd+ - | bc)"
 if [ "$pins" -ge 3 ]; then ok "$pins tool versions carry a renovate line"
