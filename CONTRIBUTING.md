@@ -215,23 +215,27 @@ git tag <version> <commit>
 git push origin <version>
 ```
 
-Renovate opens the pull requests for new versions of GitHub Actions, the
-tools the workflows install, NGINX and the Alpine the base image is built
-with, the k3s of the page "Try it locally" and the site's packages
+Renovate opens the pull requests for new versions of GitHub Actions, the tools
+the workflows install, NGINX and the Alpine the base image is built with, the
+k3s of the page "Try it locally" and the site's packages
 (`.github/renovate.json`). The `common` chart the chart depends on moves by
 hand, with a release. The config extends the shared preset of
 [ioanalytica/renovate-config](https://github.com/ioanalytica/renovate-config):
 early on Mondays (Europe/Berlin), for releases at least three days old, a
 security fix at any time, each with a review request, and never merged by the
 bot. Nothing waits for approval on its Dependency Dashboard issue: an update
-that is a deliberate move (a new major, a moved action tag, a new NGINX
-stable branch or Alpine release) comes as a pull request with the label
-`decision`. Closing it declines it: a new major stays away until someone
-moves to it by hand, any other update until the next version or commit,
-which comes as a new pull request. A pull request of a group whose updates
-go to different versions comes back after it is closed. A declined update
-stays listed on the dashboard under "Ignored or Blocked": ticking it there
-brings its pull request back.
+that is a deliberate move (a new major, a moved action tag, a new NGINX stable
+branch or Alpine release) comes as a pull request with the label `decision`.
+What closing such a pull request declines depends on it. One whose body says
+**Immortal**, as most groups with updates to different versions do, declines
+nothing: Renovate opens it again at its next scheduled run, so an update to
+hold back is excluded in `.github/renovate.json` instead. Otherwise Renovate
+says in a comment on the closed pull request what it now ignores: for a minor
+or patch update only that version, for a major every release of that major
+(the next major comes again; moving to the declined major by hand brings its
+updates back), for a digest such as a moved action tag only that digest. A
+declined update stays listed on the dashboard under "Ignored or Blocked":
+ticking it there brings its pull request back.
 
 The sums of oras and hadolint, which `.github/actions/setup-oras` and
 `.github/actions/setup-hadolint` check their downloads against, are listed in
