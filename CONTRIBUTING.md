@@ -225,21 +225,24 @@ every night (Europe/Berlin), each with a review request, and never merged by
 the bot. A release must be three days old before its pull request comes, with
 three exceptions. NGINX and the Alpine of the base image come in the night
 after their release. A new digest under an unchanged tag has no release date
-and does not wait. And a fix for a vulnerability that GitHub's advisories or
-the OSV database list for a package comes at any time; a security fix they do
-not list comes like any other release of that component. Renovate itself, the
-site's packages and a new digest of the base image's Alpine come once a month.
-Nothing waits for approval on its Dependency Dashboard issue: an update that
-is a deliberate move (a new major, a moved action tag, a new NGINX stable
-branch or Alpine release) comes as a pull request with the label `decision`.
-What closing such a pull request declines depends on it. One whose body says
-**Immortal**, as most groups with updates to different versions do, declines
-nothing: Renovate opens it again at its next scheduled run, so an update to
-hold back is excluded in `.github/renovate.json` instead. Otherwise Renovate
-says in a comment on the closed pull request what it now ignores: for a minor
-or patch update only that version, for a major every release of that major
-(the next major comes again; moving to the declined major by hand brings its
-updates back), for a digest such as a moved action tag only that digest. A
+and does not wait. And a fix for a vulnerability that Renovate raises an alert
+for comes at any time, in a monthly group as well. It raises one where
+GitHub's advisories or the OSV database list the vulnerability for a package
+it follows through a package manager, from OSV for a direct dependency only. A
+security fix without such an alert, as in a base image or a binary taken from
+a release page, comes like any other release of that component. Renovate
+itself, the site's packages and a new digest of the base image's Alpine come
+once a month. Nothing waits for approval on its Dependency Dashboard issue: an
+update that is a deliberate move (a new major, a moved action tag, a new NGINX
+stable branch or Alpine release) comes as a pull request with the label
+`decision`. What closing such a pull request declines depends on it. One whose
+body says **Immortal**, as most groups with updates to different versions do,
+declines nothing: Renovate opens it again at its next scheduled run, so an
+update to hold back is excluded in `.github/renovate.json` instead. Otherwise
+Renovate says in a comment on the closed pull request what it now ignores: for
+a minor or patch update only that version, for a major every release of that
+major (the next major comes again; moving to the declined major by hand brings
+its updates back), for a digest such as a moved action tag only that digest. A
 declined update stays listed on the dashboard under "PR Closed (Blocked)":
 ticking it there brings its pull request back.
 
