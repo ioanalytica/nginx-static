@@ -2,7 +2,7 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "description": "Dependency update pull requests for nginx-static, on the shared preset of ioanalytica/renovate-config (schedule, minimum release age, DCO, review requests, the label decision): GitHub Actions and the tools the workflows install, NGINX and the Alpine the base image is built with, the k3s of the page Try it locally, the documentation site's npm packages. The common chart dependency moves with the chart's releases. The hash pins that go with a version pin are .github/checksums.yaml's: the workflow pin-checksums.yml fills them on the bot's branch. tests/ci/test.sh guards what the bot updates and what stays manual.",
   "extends": [
-    "github>ioanalytica/renovate-config#v1.1.0"
+    "github>ioanalytica/renovate-config#v1.1.1"
   ],
   "semanticCommits": "disabled",
   "ignorePaths": [
