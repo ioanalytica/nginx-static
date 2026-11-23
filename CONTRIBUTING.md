@@ -221,9 +221,13 @@ k3s of the page "Try it locally" and the site's packages
 (`.github/renovate.json`). The `common` chart the chart depends on moves by
 hand, with a release. The config extends the shared preset of
 [ioanalytica/renovate-config](https://github.com/ioanalytica/renovate-config):
-every night (Europe/Berlin), for releases at least three days old, at once
-for what the base image and the chart contain, a security fix at any time, each with a review request, and never merged by the
-bot. Nothing waits for approval on its Dependency Dashboard issue: an update
+every night (Europe/Berlin), each with a review request, and never merged by
+the bot. A release must be three days old before its pull request comes, with
+two exceptions: NGINX and the Alpine of the base image come in the night after
+their release, and a security fix comes at any time. Renovate itself, the
+site's packages and a new digest of the base image's Alpine come once a
+month. Nothing waits for approval on its Dependency Dashboard issue: an
+update
 that is a deliberate move (a new major, a moved action tag, a new NGINX stable
 branch or Alpine release) comes as a pull request with the label `decision`.
 What closing such a pull request declines depends on it. One whose body says
