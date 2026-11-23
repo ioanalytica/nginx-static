@@ -223,12 +223,15 @@ hand, with a release. The config extends the shared preset of
 [ioanalytica/renovate-config](https://github.com/ioanalytica/renovate-config):
 every night (Europe/Berlin), each with a review request, and never merged by
 the bot. A release must be three days old before its pull request comes, with
-two exceptions: NGINX and the Alpine of the base image come in the night after
-their release, and a security fix comes at any time. Renovate itself, the
-site's packages and a new digest of the base image's Alpine come once a
-month. Nothing waits for approval on its Dependency Dashboard issue: an
-update
-that is a deliberate move (a new major, a moved action tag, a new NGINX stable
+three exceptions. NGINX and the Alpine of the base image come in the night
+after their release. A new digest under an unchanged tag has no release date
+and does not wait. And a fix that Renovate raises a [vulnerability
+alert](https://docs.renovatebot.com/configuration-options/#vulnerabilityalerts)
+for comes at any time, as a pull request of its own. Every other security fix
+comes like any other release of that component. Renovate itself, the site's
+packages and a new digest of the base image's Alpine come once a month.
+Nothing waits for approval on its Dependency Dashboard issue: an update that
+is a deliberate move (a new major, a moved action tag, a new NGINX stable
 branch or Alpine release) comes as a pull request with the label `decision`.
 What closing such a pull request declines depends on it. One whose body says
 **Immortal**, as most groups with updates to different versions do, declines
