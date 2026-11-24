@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+* **NGINX 1.30.8** in the base image, where it was 1.30.7. The release
+  fixes one security issue, excessive CPU usage with `ssl_early_data`
+  (CVE-2026-132779), and a CPU hog with TLS connections to backends. Both
+  are in code the base image is built without: TLS and the modules that
+  proxy. A site's image has to be rebuilt on this version to run it.
+
 ## 0.3.2
 
 * **NGINX 1.30.7** in the base image, where it was 1.30.6. The release
