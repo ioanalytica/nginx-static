@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.3
 
 * **NGINX 1.30.8** in the base image, where it was 1.30.7. The release
   fixes one security issue, excessive CPU usage with `ssl_early_data`
