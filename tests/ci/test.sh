@@ -483,12 +483,17 @@ else fail "pin-checksums.yml does not call renovate-config's workflow at $preset
 # name; an image digest reads sha256:…, a commit 40. The workflow may not
 # change workflows, so a pin there belongs in a local action, and each
 # entry's version is one a custom manager moves: under a "# renovate:" line,
-# or named in a manager's own pattern.
+# or named in the pattern of a manager that reads its file.
 if out="$(python3 - "$ROOT" <<'PY' 2>&1
 import glob, json, os, re, sys, yaml
 root = sys.argv[1]
-# The variables a custom manager names in its own pattern, as NGINX_VERSION.
-named = " ".join(s for m in json.load(open(f"{root}/.github/renovate.json")).get("customManagers", []) for s in m.get("matchStrings", []))
+managers = json.load(open(f"{root}/.github/renovate.json")).get("customManagers", [])
+# A custom manager that reads the file and names the variable in its own
+# pattern, as the one of NGINX_VERSION does.
+def named(path, var):
+    return any(any(re.search(f[1:-1], path) for f in m.get("managerFilePatterns", []) if f.startswith("/") and f.endswith("/"))
+               and any(re.search(rf"\b{var}=", s) for s in m.get("matchStrings", []))
+               for m in managers)
 table = yaml.safe_load(open(f"{root}/.github/checksums.yaml"))
 # An entry without pins only adds its CHANGELOG line.
 listed = {(p["file"], p["var"]) for e in table for p in e.get("pins", [])}
@@ -512,7 +517,7 @@ for path in (os.path.relpath(f, root) for f in files):
             problems.append(f"{path}: {var} is not in .github/checksums.yaml")
 for e in table:
     name, (path, var) = e["name"], e["version"].split("#")
-    if not re.search(rf"# renovate: .*\n *(?:ARG )?{var}[=:]", open(f"{root}/{path}").read()) and not re.search(rf"\b{var}=", named):
+    if not re.search(rf"# renovate: .*\n *(?:ARG )?{var}[=:]", open(f"{root}/{path}").read()) and not named(path, var):
         problems.append(f"{name}: {var} in {path} has no # renovate: line above it and no custom manager of its own")
     for p in e.get("pins", []):
         if p["file"].startswith(".github/workflows/"):
