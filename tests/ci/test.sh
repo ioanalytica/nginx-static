@@ -482,12 +482,21 @@ else fail "pin-checksums.yml does not call renovate-config's workflow at $preset
 # assignment whose value is a sum of 64 hex digits or more, whatever its
 # name; an image digest reads sha256:…, a commit 40. The workflow may not
 # change workflows, so a pin there belongs in a local action, and each
-# entry's version is one a custom manager moves.
+# entry's version is one a custom manager moves: under a "# renovate:" line,
+# or named in the pattern of a manager that reads its file.
 if out="$(python3 - "$ROOT" <<'PY' 2>&1
-import glob, os, re, sys, yaml
+import glob, json, os, re, sys, yaml
 root = sys.argv[1]
+managers = json.load(open(f"{root}/.github/renovate.json")).get("customManagers", [])
+# A custom manager that reads the file and names the variable in its own
+# pattern, as the one of NGINX_VERSION does.
+def named(path, var):
+    return any(any(re.search(f[1:-1], path) for f in m.get("managerFilePatterns", []) if f.startswith("/") and f.endswith("/"))
+               and any(re.search(rf"\b{var}=", s) for s in m.get("matchStrings", []))
+               for m in managers)
 table = yaml.safe_load(open(f"{root}/.github/checksums.yaml"))
-listed = {(p["file"], p["var"]) for e in table for p in e["pins"]}
+# An entry without pins only adds its CHANGELOG line.
+listed = {(p["file"], p["var"]) for e in table for p in e.get("pins", [])}
 pin = re.compile(r"^\s*(?:(?:ARG|export)\s+)?(\w+)\s*(?:=|:\s)\s*[\"']?[0-9a-fA-F]{64}", re.M)
 # A Dockerfile instruction continues over lines that end in a backslash,
 # with comment lines in between; ENV takes several KEY=value pairs.
@@ -508,9 +517,9 @@ for path in (os.path.relpath(f, root) for f in files):
             problems.append(f"{path}: {var} is not in .github/checksums.yaml")
 for e in table:
     name, (path, var) = e["name"], e["version"].split("#")
-    if not re.search(rf"# renovate: .*\n *(?:ARG )?{var}[=:]", open(f"{root}/{path}").read()):
-        problems.append(f"{name}: {var} in {path} has no # renovate: line above it")
-    for p in e["pins"]:
+    if not re.search(rf"# renovate: .*\n *(?:ARG )?{var}[=:]", open(f"{root}/{path}").read()) and not named(path, var):
+        problems.append(f"{name}: {var} in {path} has no # renovate: line above it and no custom manager of its own")
+    for p in e.get("pins", []):
         if p["file"].startswith(".github/workflows/"):
             problems.append(f"{name}: {p['file']} is a workflow, which the app may not change")
 print("\n".join(problems) if problems else f"{len(listed)} pins")

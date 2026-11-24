@@ -257,8 +257,11 @@ in the table (`tests/ci/test.sh`), and a pin belongs in a local action under
 
 A new NGINX release of the stable branch comes as one pull request that
 raises `NGINX_VERSION` in `docker/Dockerfile` and `appVersion` in
-`chart/Chart.yaml`, which the template test holds equal; it needs its line
-under `## Unreleased`. A release signed with a key that is not in
+`chart/Chart.yaml`, which the template test holds equal. The workflow
+`pin-checksums.yml` adds its line under `## Unreleased` in
+`chart/CHANGELOG.md` on the bot's branch (the entry `nginx` of the table has
+no hash pin, only that line); what the release fixes is added to the line by
+hand before merging. A release signed with a key that is not in
 `docker/keys/` fails the build until the key is added by hand. A new stable
 branch carries the label `decision`. The libraries NGINX is linked with are
 not pinned: every release build installs Alpine's current packages. When the
