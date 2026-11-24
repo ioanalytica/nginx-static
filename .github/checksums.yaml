@@ -4,8 +4,8 @@
 # sums from the release, after checking its PGP signature where one is given.
 # It reads this table from the pull request's merge base, so a change here
 # applies to the pull requests opened after it is merged. A new signing key
-# is a decision: the run fails until it is here. Both tools are CI only, so
-# neither has a CHANGELOG line. The NGINX keys of docker/keys/ are no pins
+# is a decision: the run fails until it is here. oras and hadolint are CI
+# only, so neither has a CHANGELOG line. The NGINX keys of docker/keys/ are no pins
 # of this table: a new NGINX signing key is added by hand.
 
 # A release installs oras with the local action; the job oras of test.yml
@@ -31,3 +31,14 @@
     - file: .github/actions/setup-hadolint/action.yml
       var: HADOLINT_SHA256
       asset: hadolint-linux-x86_64
+
+# No hash pin: the build checks the NGINX source against the keys of
+# docker/keys/. The workflow only adds the line of a new version to the
+# chart's changelog; what the release fixes is added to it in review.
+# appVersion in chart/Chart.yaml moves in the same pull request and needs no
+# entry of its own, which would add a second line.
+- name: nginx
+  version: docker/Dockerfile#NGINX_VERSION
+  changelog:
+    file: chart/CHANGELOG.md
+    line: "* **NGINX {v}** in the base image, where it was {old}. A site's image has to be rebuilt on this version to run it."

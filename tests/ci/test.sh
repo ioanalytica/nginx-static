@@ -482,12 +482,16 @@ else fail "pin-checksums.yml does not call renovate-config's workflow at $preset
 # assignment whose value is a sum of 64 hex digits or more, whatever its
 # name; an image digest reads sha256:…, a commit 40. The workflow may not
 # change workflows, so a pin there belongs in a local action, and each
-# entry's version is one a custom manager moves.
+# entry's version is one a custom manager moves: under a "# renovate:" line,
+# or named in a manager's own pattern.
 if out="$(python3 - "$ROOT" <<'PY' 2>&1
-import glob, os, re, sys, yaml
+import glob, json, os, re, sys, yaml
 root = sys.argv[1]
+# The variables a custom manager names in its own pattern, as NGINX_VERSION.
+named = " ".join(s for m in json.load(open(f"{root}/.github/renovate.json")).get("customManagers", []) for s in m.get("matchStrings", []))
 table = yaml.safe_load(open(f"{root}/.github/checksums.yaml"))
-listed = {(p["file"], p["var"]) for e in table for p in e["pins"]}
+# An entry without pins only adds its CHANGELOG line.
+listed = {(p["file"], p["var"]) for e in table for p in e.get("pins", [])}
 pin = re.compile(r"^\s*(?:(?:ARG|export)\s+)?(\w+)\s*(?:=|:\s)\s*[\"']?[0-9a-fA-F]{64}", re.M)
 # A Dockerfile instruction continues over lines that end in a backslash,
 # with comment lines in between; ENV takes several KEY=value pairs.
@@ -508,9 +512,9 @@ for path in (os.path.relpath(f, root) for f in files):
             problems.append(f"{path}: {var} is not in .github/checksums.yaml")
 for e in table:
     name, (path, var) = e["name"], e["version"].split("#")
-    if not re.search(rf"# renovate: .*\n *(?:ARG )?{var}[=:]", open(f"{root}/{path}").read()):
-        problems.append(f"{name}: {var} in {path} has no # renovate: line above it")
-    for p in e["pins"]:
+    if not re.search(rf"# renovate: .*\n *(?:ARG )?{var}[=:]", open(f"{root}/{path}").read()) and not re.search(rf"\b{var}=", named):
+        problems.append(f"{name}: {var} in {path} has no # renovate: line above it and no custom manager of its own")
+    for p in e.get("pins", []):
         if p["file"].startswith(".github/workflows/"):
             problems.append(f"{name}: {p['file']} is a workflow, which the app may not change")
 print("\n".join(problems) if problems else f"{len(listed)} pins")
