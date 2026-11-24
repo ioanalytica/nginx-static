@@ -6,7 +6,7 @@ name: nginx-static
 version: 0.3.2
 # The NGINX in the project's base image, NGINX_VERSION of docker/Dockerfile
 # (chart/tests/template-test.sh). The image's tag is the chart version.
-appVersion: "1.30.7"
+appVersion: "1.30.8"
 type: application
 
 description: >-

@@ -22,7 +22,7 @@ SHELL ["/bin/ash", "-o", "pipefail", "-c"]
 
 # The stable branch. Renovate moves it, together with appVersion in
 # chart/Chart.yaml, which names the same version.
-ARG NGINX_VERSION=1.30.7
+ARG NGINX_VERSION=1.30.8
 
 # The build cache keeps this layer as long as the base image is unchanged,
 # which would link an older build's zlib or PCRE2. The release workflow
